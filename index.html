@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEDame</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --hl-kw: #ff79c6; --hl-bi: #8be9fd; --hl-st: #f1fa8c; --hl-nm: #ffb86c;
+    --hl-cm: #6272a4; --hl-op: #ff79c6; --hl-var: #50fa7b; --hl-spr: #8affc1;
+    --hl-ani: #bd93f9; --hl-mus: #ff6e6e; --hl-tag: #e6db74;
+  }
+  html, body { width:100%; height:100%; overflow:hidden; background:#07090e; font-family: 'Courier New', monospace; color:#c3e9ff; }
+  #app { display:flex; width:100%; height:100%; }
+  #left { flex:1; display:flex; justify-content:center; align-items:center; gap:26px; padding:20px; }
+  #palette { display:none; flex-direction:column; gap:12px; align-items:center; }
+  canvas { display:block; background:#0a0d14; border-radius:14px; box-shadow: inset 0 0 40px #000a, 0 8px 40px #0008; }
+  canvas.draggable { cursor: grab; }
+  canvas.grabbing { cursor: grabbing; }
+  canvas.picker { cursor: crosshair; }
+  canvas.grid { cursor: crosshair; }
+  #right { width:340px; background:#0f1320; padding:16px; display:flex; flex-direction:column; gap:10px; border-left:1px solid #1c2330; overflow-y:auto; }
+  .btn { padding:10px 14px; border-radius:8px; border:1px solid #2a3344; background:linear-gradient(180deg,#222c3e,#131a28); color:#c3e9ff; cursor:pointer; font-family:inherit; font-size:13px; text-align:left; transition: all .15s; }
+  .btn:hover { border-color:#4a8fdc; box-shadow:0 0 12px #2a6fb066; color:#eaf6ff; }
+  .btn.active { border-color:#4a8fdc; background:linear-gradient(180deg,#2a4a6e,#1a2c44); box-shadow:0 0 14px #4a8fdc55; }
+  .sprite-item { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#161c2a; border:1px solid #222b3c; border-radius:6px; font-size:12px; gap:6px; }
+  .sprite-item span.name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+  .sprite-item span.name.clickable { cursor:pointer; }
+  .sprite-item span.name.clickable:hover { color:#7fc8ff; }
+  .sprite-tags { display:flex; flex-wrap:wrap; gap:3px; margin-top:2px; }
+  .tag-badge { font-size:10px; background:#2a3a54; color:#7fb8e0; padding:1px 6px; border-radius:8px; border:1px solid #3a4a6a; }
+  .actions { display:flex; gap:4px; }
+  .plus { cursor:pointer; color:#4a8fdc; font-weight:bold; padding:0 6px; font-size:16px; line-height:1; user-select:none; }
+  .plus:hover { color:#7fc8ff; text-shadow:0 0 10px #4a8fdc; }
+  .plus.danger { color:#c05050; }
+  .plus.danger:hover { color:#ff7070; text-shadow:0 0 10px #c05050; }
+  .plus.play { color:#40c060; }
+  .plus.play:hover { color:#70e090; text-shadow:0 0 10px #40c060; }
+  .plus.warn { color:#d0a040; }
+  .plus.warn:hover { color:#ffd070; text-shadow:0 0 10px #d0a040; }
+  .plus.tag { color:#a57bd4; }
+  .plus.tag:hover { color:#d0a0ff; text-shadow:0 0 10px #a57bd4; }
+  .color-swatch { width:40px; height:40px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition: all .15s; }
+  .color-swatch:hover { transform:scale(1.1); }
+  .color-swatch.active { border-color:#fff; box-shadow:0 0 18px #fff9; }
+  .fill-btn { min-width:64px; height:40px; padding:0 12px; border-radius:10px; cursor:pointer; border:3px solid transparent; background:#1a2130; color:#c3e9ff; display:flex; align-items:center; justify-content:center; font-family:inherit; font-size:12px; transition: all .15s; letter-spacing:.5px; }
+  .fill-btn:hover { transform:scale(1.08); background:#232c3e; }
+  .fill-btn.active { border-color:#4a8fdc; background:#2a4a6e; box-shadow:0 0 14px #4a8fdc55; }
+  input[type="text"], input[type="number"] { padding:8px 10px; background:#0a0e16; border:1px solid #2a3344; border-radius:6px; color:#c3e9ff; font-family:inherit; font-size:13px; width:100%; outline:none; }
+  input[type="text"]:focus, input[type="number"]:focus { border-color:#4a8fdc; }
+  textarea { width:100%; min-height:420px; background:#0a0e16; border:1px solid #2a3344; border-radius:6px; color:#c3e9ff; font-family:'Courier New', monospace; font-size:13px; padding:10px; resize:vertical; outline:none; line-height:1.55; tab-size: 2; }
+  textarea:focus { border-color:#4a8fdc; box-shadow:0 0 12px #2a6fb033; }
+  .code-wrap { position: relative; width: 100%; height: 380px; min-height: 380px; flex-shrink: 0; overflow: hidden; }
+  .code-wrap pre, .code-wrap textarea {
+    position: absolute; top:0; left:0; width:100%; height:100%;
+    min-height:0; max-height:100%; margin:0; padding:10px;
+    border:1px solid #2a3344; border-radius:6px;
+    font-family:'Courier New', monospace; font-size:13px; line-height:1.55;
+    white-space:pre-wrap; word-wrap:break-word; tab-size:2; letter-spacing:0; box-sizing:border-box;
+  }
+  .code-wrap pre { pointer-events:none; background:#0a0e16; color:#c3e9ff; overflow:hidden; z-index:1; }
+  .code-wrap textarea { background:transparent; color:transparent; caret-color:#c3e9ff; resize:none; overflow:auto; z-index:2; outline:none; }
+  .code-wrap textarea:focus { border-color:#4a8fdc; }
+  .code-wrap .kw { color: var(--hl-kw); }
+  .code-wrap .bi { color: var(--hl-bi); }
+  .code-wrap .st { color: var(--hl-st); }
+  .code-wrap .nm { color: var(--hl-nm); }
+  .code-wrap .cm { color: var(--hl-cm); font-style:italic; }
+  .code-wrap .op { color: var(--hl-op); }
+  .code-wrap .var { color: var(--hl-var); font-weight:bold; }
+  .code-wrap .spr { color: var(--hl-spr); font-weight:bold; }
+  .code-wrap .ani { color: var(--hl-ani); font-weight:bold; }
+  .code-wrap .mus { color: var(--hl-mus); font-weight:bold; }
+  .code-wrap .tag { color: var(--hl-tag); font-weight:bold; }
+  details.cmd-help { background:#0a0e16; border:1px solid #1c2330; border-radius:6px; padding:6px 10px; flex-shrink:0; max-height:340px; overflow-y:auto; }
+  details.cmd-help summary { cursor:pointer; font-size:11px; color:#7fb8e0; text-transform:uppercase; letter-spacing:1.5px; opacity:0.85; padding:4px 0; user-select:none; outline:none; }
+  details.cmd-help[open] summary { border-bottom:1px solid #1c2330; margin-bottom:6px; padding-bottom:6px; }
+  .frame-strip { display:flex; flex-wrap:wrap; gap:4px; }
+  .frame-chip { min-width:32px; height:32px; border-radius:6px; border:2px solid #2a3344; background:#161c2a; color:#c3e9ff; cursor:pointer; font-family:inherit; font-size:12px; display:flex; align-items:center; justify-content:center; }
+  .frame-chip.active { border-color:#4a8fdc; background:#2a4a6e; box-shadow:0 0 10px #4a8fdc66; }
+  .size-row { display:flex; gap:4px; flex-wrap:wrap; }
+  .size-row .btn { flex:1; min-width:56px; padding:6px; text-align:center; }
+  .custom-size-row { display:flex; gap:4px; align-items:center; margin-top:4px; }
+  .custom-size-row input { width:70px; flex:none; padding:6px 8px; }
+  .custom-size-row .btn { padding:6px 12px; text-align:center; flex:none; }
+  .color-set-row { display:flex; gap:6px; align-items:center; padding:4px 0; }
+  .color-set-row span { flex:1; font-size:12px; color:#c3e9ff; }
+  .color-set-row input[type="color"] { width:40px; height:28px; padding:0; border:1px solid #2a3344; background:#0a0e16; border-radius:4px; cursor:pointer; }
+  #logWindow { position:fixed; top:20px; left:20px; width:400px; max-height:520px; background:#050810f0; border:1px solid #2a3344; border-radius:10px; padding:14px; font-size:13px; overflow-y:auto; display:none; z-index:100; white-space:pre-wrap; box-shadow: 0 10px 40px #000c; line-height:1.5; }
+  .error-box { background:#3a1010; border:1px solid #a03030; color:#ffb0b0; padding:10px; border-radius:6px; font-size:12px; line-height:1.5; }
+  h3 { font-size:11px; color:#7fb8e0; margin-top:8px; text-transform:uppercase; letter-spacing:1.5px; opacity:.8; }
+  .hint { font-size:11px; color:#5c7a99; line-height:1.7; }
+  #modalOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center; z-index:200; backdrop-filter: blur(4px); }
+  #modalOverlay.show { display:flex; }
+  #modalBox { background:#131a28; border:1px solid #2a3344; border-radius:14px; padding:22px; width:340px; box-shadow:0 20px 60px #000d; display:flex; flex-direction:column; gap:14px; }
+  #modalTitle { font-size:13px; color:#7fb8e0; text-transform:uppercase; letter-spacing:1px; }
+  #modalInput { display:none; }
+  #modalMsg { font-size:14px; color:#c3e9ff; line-height:1.5; }
+  #modalButtons { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
+  #modalButtons .btn { flex:none; min-width:80px; text-align:center; }
+  .btn.primary { border-color:#4a8fdc; background:linear-gradient(180deg,#2a4a6e,#1a2c44); }
+  .btn.danger { border-color:#a03030; background:linear-gradient(180deg,#4a1e1e,#2c1010); color:#ffb0b0; }
+  .mode-badge { font-size:11px; color:#d0a040; background:#2a2010; border:1px solid #4a3a20; padding:4px 10px; border-radius:20px; text-align:center; margin-top:6px; letter-spacing:.5px; }
+  #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px); background:#131a28; border:1px solid #4a8fdc; color:#c3e9ff; padding:12px 24px; border-radius:10px; font-family:'Courier New', monospace; font-size:15px; opacity:0; pointer-events:none; transition:all .25s; z-index:300; box-shadow:0 0 24px #4a8fdc66; letter-spacing:.5px; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="left">
+    <div id="palette"></div>
+    <canvas id="cv" width="600" height="600"></canvas>
+  </div>
+  <div id="right"></div>
+</div>
+<div id="logWindow"></div>
+<div id="toast"></div>
+<div id="modalOverlay">
+  <div id="modalBox">
+    <div id="modalTitle"></div>
+    <div id="modalMsg"></div>
+    <input type="text" id="modalInput" />
+    <div id="modalButtons"></div>
+  </div>
+</div>
+<script>
+(function(){
+  let WORLD = 24;
+  const DEFAULT_WORLD = 24;
+  const MIN_WORLD = 8;
+  const MAX_WORLD = 64;
+  const DEFAULT_SPRITE_SIZE = 8;
+  const MIN_SPRITE_SIZE = 2;
+  const MAX_SPRITE_SIZE = 32;
+  const COLORS = { red:'#ff3b3b', green:'#2ecc71', yellow:'#f1c40f', blue:'#3498db', black:'#000000', white:'#ffffff', gray:'#808080' };
+  const COLOR_KEYS = ['red','green','yellow','blue','black','white','gray'];
+  const PIX_CHAR = { '#ff3b3b':'r', '#2ecc71':'g', '#f1c40f':'y', '#3498db':'b', '#000000':'k', '#ffffff':'w', '#808080':'a' };
+  const PIX_CHAR_REV = { 'r':'#ff3b3b', 'g':'#2ecc71', 'y':'#f1c40f', 'b':'#3498db', 'k':'#000000', 'w':'#ffffff', 'a':'#808080' };
+  function encodePixels(px) { if (typeof px === 'string') return px; return px.map(row => row.map(c => PIX_CHAR[c] || '.').join('')).join('/'); }
+  function decodePixels(data, size) {
+    if (Array.isArray(data)) return data;
+    if (typeof data !== 'string') return Array.from({length:size},()=>Array(size).fill(null));
+    return data.split('/').map(row => row.split('').map(c => PIX_CHAR_REV[c] || null));
+  }
+
+  const STORAGE_KEY = 'ledame_games_v3';
+  const MUSIC_KEY = 'ledame_music_v1';
+  const SYNTAX_KEY = 'ledame_syntax_colors_v1';
+  const LEGACY_KEYS = ['ledame_games_v1', 'ledame_games_v2'];
+  const FILE_FORMAT = 'ledame';
+  const FILE_VERSION = 3;
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const right = document.getElementById('right');
+  const paletteEl = document.getElementById('palette');
+  const logWin = document.getElementById('logWindow');
+  const toastEl = document.getElementById('toast');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalMsg = document.getElementById('modalMsg');
+  const modalInput = document.getElementById('modalInput');
+  const modalButtons = document.getElementById('modalButtons');
+
+  const DEFAULT_SYNTAX = { kw:'#ff79c6', bi:'#8be9fd', st:'#f1fa8c', nm:'#ffb86c', cm:'#6272a4', op:'#ff79c6', var:'#50fa7b', sprite:'#8affc1', anim:'#bd93f9', music:'#ff6e6e', tag:'#e6db74' };
+  let syntaxColors = Object.assign({}, DEFAULT_SYNTAX);
+  function applySyntaxColors() {
+    const r = document.documentElement;
+    r.style.setProperty('--hl-kw', syntaxColors.kw); r.style.setProperty('--hl-bi', syntaxColors.bi);
+    r.style.setProperty('--hl-st', syntaxColors.st); r.style.setProperty('--hl-nm', syntaxColors.nm);
+    r.style.setProperty('--hl-cm', syntaxColors.cm); r.style.setProperty('--hl-op', syntaxColors.op);
+    r.style.setProperty('--hl-var', syntaxColors.var); r.style.setProperty('--hl-spr', syntaxColors.sprite);
+    r.style.setProperty('--hl-ani', syntaxColors.anim); r.style.setProperty('--hl-mus', syntaxColors.music);
+    r.style.setProperty('--hl-tag', syntaxColors.tag);
+  }
+  function loadSyntaxColors() {
+    try { const raw = localStorage.getItem(SYNTAX_KEY); if (raw) { const p = JSON.parse(raw); for (const k in DEFAULT_SYNTAX) if (typeof p[k] === 'string') syntaxColors[k] = p[k]; } } catch (e) {}
+    applySyntaxColors();
+  }
+  function saveSyntaxColors() { try { localStorage.setItem(SYNTAX_KEY, JSON.stringify(syntaxColors)); } catch (e) {} }
+
+  class BreakSignal {}
+  class ContinueSignal {}
+
+  const KEYWORDS = ['if','elseif','else','while','function','end','var','True','False','break','continue'];
+  const BUILTINS = ['LEDame','TSprite','all','mouse','key','mpos','Spos','Scan','Wait','createP','createT','DelP','print','sound','rotation','random','connected','hold','released','Spawn','Kill','math','str','gp','tags','anim'];
+
+  function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function collectNames(game, musicList) {
+    const varsSet = new Set(), spritesSet = new Set(), animsSet = new Set(), musicSet = new Set(), tagsSet = new Set();
+    const varRegex = /\bvar\s+([A-Za-z_]\w*)/g;
+    if (game) {
+      for (const s of (game.sprites || [])) {
+        spritesSet.add(s.name);
+        for (const t of (s.tags || [])) tagsSet.add(t);
+        if (s.script) { let m; while ((m = varRegex.exec(s.script)) !== null) varsSet.add(m[1]); }
+      }
+      if (game.globalScript) { let m; while ((m = varRegex.exec(game.globalScript)) !== null) varsSet.add(m[1]); }
+      for (const a of (game.animations || [])) animsSet.add(a.name);
+    }
+    if (musicList) for (const m of musicList) musicSet.add(m.name);
+    return { varsSet, spritesSet, animsSet, musicSet, tagsSet };
+  }
+  function highlightCode(code, game, musicList) {
+    const { varsSet, spritesSet, animsSet, musicSet, tagsSet } = collectNames(game, musicList);
+    const parts = []; let i = 0; const n = code.length;
+    while (i < n) {
+      const c = code[i];
+      if (c === '/' && code[i+1] === '/') { let j = i; while (j < n && code[j] !== '\n') j++; parts.push(['cm', code.slice(i, j)]); i = j; continue; }
+      if (c === '"' || c === "'") {
+        const q = c; let j = i + 1;
+        while (j < n && code[j] !== q && code[j] !== '\n') { if (code[j] === '\\' && j+1 < n) j++; j++; }
+        if (j < n && code[j] === q) j++; parts.push(['st', code.slice(i, j)]); i = j; continue;
+      }
+      if (c >= '0' && c <= '9') { let j = i; while (j < n && ((code[j] >= '0' && code[j] <= '9') || code[j] === '.')) j++; parts.push(['nm', code.slice(i, j)]); i = j; continue; }
+      if (/[A-Za-z_]/.test(c)) {
+        let j = i; while (j < n && /[A-Za-z0-9_]/.test(code[j])) j++;
+        const word = code.slice(i, j); let cls = null;
+        if (KEYWORDS.includes(word)) cls = 'kw';
+        else if (BUILTINS.includes(word)) cls = 'bi';
+        else if (varsSet.has(word)) cls = 'var';
+        else if (spritesSet.has(word)) cls = 'spr';
+        else if (animsSet.has(word)) cls = 'ani';
+        else if (musicSet.has(word)) cls = 'mus';
+        else if (tagsSet.has(word)) cls = 'tag';
+        parts.push([cls, word]); i = j; continue;
+      }
+      if ('+-*/%<>=!'.includes(c)) { let j = i; while (j < n && '+-*/%<>=!'.includes(code[j])) j++; parts.push(['op', code.slice(i, j)]); i = j; continue; }
+      parts.push([null, c]); i++;
+    }
+    return parts.map(([cls, txt]) => { const esc = escHtml(txt); return cls ? `<span class="${cls}">${esc}</span>` : esc; }).join('') + '\n';
+  }
+
+  let toastTimeout = null;
+  function showToast(text) { toastEl.textContent = text; toastEl.classList.add('show'); clearTimeout(toastTimeout); toastTimeout = setTimeout(() => toastEl.classList.remove('show'), 1600); }
+  function closeModal() { modalOverlay.classList.remove('show'); }
+  function showPrompt(title, defaultValue) {
+    return new Promise(resolve => {
+      modalTitle.textContent = title; modalMsg.style.display = 'none';
+      modalInput.style.display = 'block'; modalInput.value = defaultValue || '';
+      modalButtons.innerHTML = '';
+      const cancel = el('button', 'btn', 'Отмена'); cancel.onclick = () => { closeModal(); resolve(null); };
+      const ok = el('button', 'btn primary', 'OK'); ok.onclick = () => { const v = modalInput.value; closeModal(); resolve(v); };
+      modalButtons.appendChild(cancel); modalButtons.appendChild(ok);
+      modalOverlay.classList.add('show');
+      setTimeout(() => { modalInput.focus(); modalInput.select(); }, 30);
+      modalInput.onkeydown = (e) => {
+        if (e.key === 'Enter') { const v = modalInput.value; closeModal(); resolve(v); }
+        if (e.key === 'Escape') { closeModal(); resolve(null); }
+      };
+    });
+  }
+  function showConfirm(title, message, okLabel) {
+    return new Promise(resolve => {
+      modalTitle.textContent = title; modalMsg.style.display = 'block'; modalMsg.textContent = message;
+      modalInput.style.display = 'none'; modalButtons.innerHTML = '';
+      const cancel = el('button', 'btn', 'Отмена'); cancel.onclick = () => { closeModal(); resolve(false); };
+      const ok = el('button', 'btn danger', okLabel || 'Удалить'); ok.onclick = () => { closeModal(); resolve(true); };
+      modalButtons.appendChild(cancel); modalButtons.appendChild(ok);
+      modalOverlay.classList.add('show');
+      setTimeout(() => ok.focus(), 30);
+    });
+  }
+  function showAlert(title, message) {
+    return new Promise(resolve => {
+      modalTitle.textContent = title; modalMsg.style.display = 'block'; modalMsg.textContent = message;
+      modalInput.style.display = 'none'; modalButtons.innerHTML = '';
+      const ok = el('button', 'btn primary', 'OK'); ok.onclick = () => { closeModal(); resolve(true); };
+      modalButtons.appendChild(ok);
+      modalOverlay.classList.add('show');
+      setTimeout(() => ok.focus(), 30);
+    });
+  }
+  function showChoice(title, message, choices) {
+    return new Promise(resolve => {
+      modalTitle.textContent = title; modalMsg.style.display = 'block'; modalMsg.textContent = message;
+      modalInput.style.display = 'none'; modalButtons.innerHTML = '';
+      for (const c of choices) {
+        const b = el('button', 'btn' + (c.primary ? ' primary' : '') + (c.danger ? ' danger' : ''), c.label);
+        b.onclick = () => { closeModal(); resolve(c.value); };
+        modalButtons.appendChild(b);
+      }
+      modalOverlay.classList.add('show');
+    });
+  }
+
+  function parseTags(str) {
+    return String(str || '').split(/[,\s]+/).map(t => t.trim()).filter(t => /^[A-Za-z_]\w*$/.test(t)).filter((t, i, arr) => arr.indexOf(t) === i);
+  }
+
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+    return audioCtx;
+  }
+  function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function playMusicTrack(track, volume, speed) {
+    if (!track || !track.notes || !track.notes.length) return;
+    const actx = getAudioCtx(); if (!actx) return;
+    const vol = (volume === undefined || volume === null || volume === '') ? 0.3 : Math.max(0, Math.min(1, Number(volume) || 0));
+    const sp = (speed === undefined || speed === null || speed === '') ? 1 : Math.max(0.1, Number(speed) || 1);
+    const bpm = track.bpm || 120; const beatSec = (60 / bpm) / sp;
+    const start = actx.currentTime + 0.05;
+    const master = actx.createGain(); master.gain.value = vol; master.connect(actx.destination);
+    for (const n of track.notes) {
+      const freq = midiToFreq(n.midi); const t = start + n.beat * beatSec; const dur = beatSec * 0.9;
+      const osc = actx.createOscillator(); const g1 = actx.createGain();
+      osc.type = 'triangle'; osc.frequency.value = freq;
+      g1.gain.setValueAtTime(0, t); g1.gain.linearRampToValueAtTime(0.7, t + 0.01); g1.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.connect(g1).connect(master); osc.start(t); osc.stop(t + dur + 0.05);
+      const osc2 = actx.createOscillator(); const g2 = actx.createGain();
+      osc2.type = 'sine'; osc2.frequency.value = freq / 2;
+      g2.gain.setValueAtTime(0, t); g2.gain.linearRampToValueAtTime(0.3, t + 0.01); g2.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc2.connect(g2).connect(master); osc2.start(t); osc2.stop(t + dur + 0.05);
+    }
+  }
+
+  let music = [];
+  function scheduleMusicSave() { try { localStorage.setItem(MUSIC_KEY, JSON.stringify(music)); } catch (e) {} }
+  function loadSavedMusic() {
+    try {
+      const raw = localStorage.getItem(MUSIC_KEY); if (!raw) return [];
+      const parsed = JSON.parse(raw); if (!Array.isArray(parsed)) return [];
+      return parsed.map(m => ({ name: m.name || 'track', bpm: m.bpm || 120, notes: Array.isArray(m.notes) ? m.notes.filter(n => Number.isFinite(n.midi) && Number.isFinite(n.beat)) : [] }));
+    } catch (e) { return []; }
+  }
+
+  const MUSIC_ROWS = 24, MUSIC_COLS = 16, MIDI_TOP = 83;
+  let musicGrid = null, editingMusic = null, editingMusicOriginal = null, musicDragValue = null, musicReturnTo = 'menu';
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  function midiToName(midi) { return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
+  function isSharpRow(row) { const midi = MIDI_TOP - row; return [1,3,6,8,10].includes(midi % 12); }
+  function emptyGrid() { return Array.from({length:MUSIC_ROWS}, () => Array(MUSIC_COLS).fill(false)); }
+  function notesToGrid(notes) {
+    const g = emptyGrid();
+    for (const n of notes) { const r = MIDI_TOP - n.midi; if (r >= 0 && r < MUSIC_ROWS && n.beat >= 0 && n.beat < MUSIC_COLS) g[r][n.beat] = true; }
+    return g;
+  }
+  function gridToNotes(g) {
+    const out = [];
+    for (let r = 0; r < MUSIC_ROWS; r++) for (let c = 0; c < MUSIC_COLS; c++) if (g[r][c]) out.push({ midi: MIDI_TOP - r, beat: c });
+    return out;
+  }
+  function musicEditorLayout() {
+    const maxW = Math.max(200, window.innerWidth - 420 - 70);
+    const maxH = Math.max(200, window.innerHeight - 40);
+    const cell = Math.max(14, Math.min(36, Math.floor(Math.min(maxW / MUSIC_COLS, maxH / MUSIC_ROWS))));
+    const labelW = 60;
+    return { cell, labelW, totalW: labelW + MUSIC_COLS * cell, totalH: MUSIC_ROWS * cell };
+  }
+
+  let editingAnimation = null, editingAnimationOriginal = null, editingAnimationFrameIndex = 0;
+  let animationPreviewTimer = null, animationPaletteColor = COLORS.white, animationTool = 'draw';
+  function makeEmptyFrame(size) { return { pixels: Array.from({length:size}, () => Array(size).fill(null)), duration: 100 }; }
+  function resizeAnimationSize(newSize) {
+    const oldSize = editingAnimation.size;
+    for (const f of editingAnimation.frames) {
+      const old = f.pixels; const next = Array.from({length:newSize}, () => Array(newSize).fill(null));
+      const copy = Math.min(oldSize, newSize);
+      for (let y = 0; y < copy; y++) for (let x = 0; x < copy; x++) next[y][x] = old[y] && old[y][x];
+      f.pixels = next;
+    }
+    editingAnimation.size = newSize;
+  }
+  function importSpriteToFrame(sprite) {
+    const sz = editingAnimation.size; const next = Array.from({length:sz}, () => Array(sz).fill(null));
+    const protoSize = sprite.size || DEFAULT_SPRITE_SIZE; const copy = Math.min(sz, protoSize);
+    for (let y = 0; y < copy; y++) for (let x = 0; x < copy; x++) next[y][x] = sprite.pixels[y] && sprite.pixels[y][x];
+    return next;
+  }
+  function pickFrame(frames, elapsed) {
+    if (!frames || !frames.length) return null;
+    let total = 0; for (const f of frames) total += (f.duration || 100);
+    if (total <= 0) return frames[0];
+    let t = elapsed % total, cum = 0;
+    for (const f of frames) { const d = f.duration || 100; if (t < cum + d) return f; cum += d; }
+    return frames[frames.length - 1];
+  }
+  function rotateSprite90cw(s) {
+    const sz = s.size || DEFAULT_SPRITE_SIZE; const p = s.pixels;
+    const next = Array.from({length: sz}, () => Array(sz).fill(null));
+    for (let y = 0; y < sz; y++) for (let x = 0; x < sz; x++) next[y][x] = p[sz - 1 - x][y];
+    s.pixels = next;
+  }
+  function gameToExport(game) {
+    return { name: game.name, globalScript: game.globalScript || '', worldSize: game.worldSize || DEFAULT_WORLD,
+      sprites: game.sprites.map(s => ({ name: s.name, pixels: encodePixels(s.pixels), size: s.size || DEFAULT_SPRITE_SIZE, x: s.x || 0, y: s.y || 0, placed: !!s.placed, deleted: !!s.deleted, script: s.script || '', tags: (s.tags || []).slice() })),
+      animations: (game.animations || []).map(a => ({ name: a.name, size: a.size, frames: a.frames.map(f => ({ pixels: encodePixels(f.pixels), duration: f.duration })) }))
+    };
+  }
+  function exportGameFile(game) {
+    const usedTrackNames = new Set();
+    const allCode = (game.globalScript || '') + '\n' + game.sprites.map(s => s.script || '').join('\n');
+    const re = /\bsound\s*\(\s*(?:["']([^"']+)["']|([A-Za-z_]\w*))/g; let m;
+    while ((m = re.exec(allCode)) !== null) { const nm = m[1] || m[2]; if (nm) usedTrackNames.add(nm); }
+    const tracksToExport = usedTrackNames.size > 0 ? music.filter(t => usedTrackNames.has(t.name)) : music.slice();
+    const payload = { format: FILE_FORMAT, version: FILE_VERSION, exportedAt: new Date().toISOString(), game: gameToExport(game), music: tracksToExport.map(t => ({ name: t.name, bpm: t.bpm || 120, notes: t.notes.map(n => ({ midi: n.midi, beat: n.beat })) })) };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (game.name || 'game').replace(/[^\w\-]/g, '_') || 'game';
+    a.href = url; a.download = safeName + '.led';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function parseLedFile(text) {
+    let parsed; try { parsed = JSON.parse(text); } catch (e) { throw new Error('Файл не является корректным .led (не JSON)'); }
+    if (!parsed || typeof parsed !== 'object') throw new Error('Пустой файл');
+    if (parsed.format !== FILE_FORMAT) throw new Error('Это не файл LEDame (.led)');
+    if (!parsed.game || typeof parsed.game !== 'object') throw new Error('В файле нет данных игры');
+    const g = parsed.game;
+    const worldSize = Math.max(MIN_WORLD, Math.min(MAX_WORLD, Number(g.worldSize) || DEFAULT_WORLD));
+    const sprites = (g.sprites || []).map(s => {
+      const size = s.size || DEFAULT_SPRITE_SIZE;
+      return { name: s.name || 'sprite', pixels: decodePixels(s.pixels, size), size, x: s.x || 0, y: s.y || 0, placed: !!s.placed, deleted: !!s.deleted, script: s.script || '', tags: Array.isArray(s.tags) ? s.tags.filter(t => /^[A-Za-z_]\w*$/.test(t)) : [] };
+    });
+    const animations = (g.animations || []).map(a => {
+      const size = a.size || DEFAULT_SPRITE_SIZE;
+      return { name: a.name || 'anim', size, frames: (a.frames || []).map(f => ({ pixels: decodePixels(f.pixels, size), duration: Number.isFinite(f.duration) ? Math.max(10, Math.round(f.duration)) : 100 })) };
+    });
+    const musicTracks = (parsed.music || []).map(t => ({ name: t.name || 'track', bpm: t.bpm || 120, notes: Array.isArray(t.notes) ? t.notes.filter(n => Number.isFinite(n.midi) && Number.isFinite(n.beat)) : [] }));
+    return { name: g.name || 'imported', globalScript: g.globalScript || '', worldSize, sprites, animations, music: musicTracks };
+  }
+  async function importGameFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.led,application/json'; input.style.display = 'none';
+    document.body.appendChild(input);
+    input.onchange = async () => {
+      const file = input.files && input.files[0]; document.body.removeChild(input); if (!file) return;
+      const text = await file.text(); let data;
+      try { data = parseLedFile(text); } catch (e) { showAlert('Ошибка импорта', e.message); return; }
+      let nm = (data.name || 'imported').trim() || 'imported';
+      if (games.some(g => g.name === nm)) {
+        const answer = await showChoice('Имя занято', 'Игра "' + nm + '" уже существует. Что делать?',
+          [{ label: 'Копия', value: 'copy', primary: true }, { label: 'Заменить', value: 'replace', danger: true }, { label: 'Отмена', value: 'cancel' }]);
+        if (answer === 'cancel' || answer === null) return;
+        if (answer === 'copy') { let base = nm + '_copy', i = 2; while (games.some(g => g.name === base)) { base = nm + '_copy_' + i; i++; } nm = base; }
+        else if (answer === 'replace') { games = games.filter(g => g.name !== nm); }
+      }
+      let addedMusic = 0;
+      for (const t of data.music) { if (!music.some(m => m.name === t.name)) { music.push({ name: t.name, bpm: t.bpm, notes: t.notes }); addedMusic++; } }
+      if (addedMusic > 0) scheduleMusicSave();
+      games.push({ name: nm, worldSize: data.worldSize, sprites: data.sprites, animations: data.animations, globalScript: data.globalScript });
+      scheduleSave(); renderAll();
+      const parts = ['Игра "' + nm + '" загружена', 'спрайтов: ' + data.sprites.length];
+      if (data.animations.length) parts.push('анимаций: ' + data.animations.length);
+      if (addedMusic > 0) parts.push('треков: ' + addedMusic);
+      showToast(parts.join(' · '));
+    };
+    input.click();
+  }
+
+  let state = 'menu';
+  let games = [];
+  let currentGame = null;
+  let sprites = [];
+  let world = [], worldPixId = [], worldPixHidden = [], worldTexts = [];
+  let vars = new Map(), funcs = new Map();
+  let paused = false, gameRunning = false, gameGen = 0, log = [];
+  let gameStartTime = 0, grabState = null;
+  let editingSprite = null, editingSpriteOriginal = null, editingScript = null;
+  let editorTool = 'move';
+  let mouseX = -1, mouseY = -1, mouseDown = false;
+  let mouseButtons = { left: false, right: false, middle: false };
+  let pendingClicks = { left: 0, right: 0, middle: 0 };
+  let pendingPresses = new Set(), pendingReleased = new Set();
+  let keysPressed = new Set(), keysPending = new Set();
+  let dragging = null, dragOffsetX = 0, dragOffsetY = 0;
+
+  function syncWorldFromGame() { if (currentGame) WORLD = Math.max(MIN_WORLD, Math.min(MAX_WORLD, currentGame.worldSize || DEFAULT_WORLD)); }
+  function setWorldSize(newSize) {
+    if (!currentGame) return;
+    newSize = Math.max(MIN_WORLD, Math.min(MAX_WORLD, Math.round(newSize)));
+    currentGame.worldSize = newSize; WORLD = newSize;
+    for (const s of currentGame.sprites) if (s.placed) clampSprite(s);
+    scheduleSave();
+  }
+  function isSpriteHeld(name, ms) {
+    const sp = sprites.find(x => x.name === name && !x.deleted);
+    if (!sp || sp.collision === false) return false;
+    if (sp.pressStart === null || sp.pressStart === undefined) return false;
+    return (performance.now() - sp.pressStart) >= ms;
+  }
+  function wasSpriteReleased(name) {
+    const sp = sprites.find(x => x.name === name && !x.deleted);
+    if (!sp || sp.collision === false) return false;
+    if (pendingReleased.has(name)) { pendingReleased.delete(name); return true; }
+    return false;
+  }
+  function spritesWithTag(tag) { return sprites.filter(s => s.tags && s.tags.includes(tag)); }
+  function isAnyTagPressed(tag, hold) {
+    const group = spritesWithTag(tag); if (!group.length) return false;
+    if (hold) {
+      for (const s of group) {
+        if (s.deleted) continue;
+        if (s.collision === false) continue;
+        const sz = s.size || DEFAULT_SPRITE_SIZE;
+        if (mouseDown && mouseX >= s.x && mouseX < s.x + sz && mouseY >= s.y && mouseY < s.y + sz) return true;
+      }
+      return false;
+    }
+    let found = false;
+    for (const s of group) {
+      if (s.collision === false) continue;
+      if (pendingPresses.has(s.name)) { found = true; pendingPresses.delete(s.name); }
+    }
+    return found;
+  }
+  function resolveGroup(nameOrTag) {
+    if (!nameOrTag) return [];
+    if (nameOrTag.startsWith('tags.')) return spritesWithTag(nameOrTag.slice(5));
+    const sp = sprites.find(s => s.name === nameOrTag);
+    return sp ? [sp] : [];
+  }
+  function isAnyConnectedExpr(aStr, bStr) {
+    const A = resolveGroup(aStr); const B = resolveGroup(bStr);
+    if (!A.length || !B.length) return false;
+    for (const a of A) for (const b of B) { if (a === b) continue; if (spritesConnected(a, b)) return true; }
+    return false;
+  }
+
+  function resolveColor(c) { return typeof c !== 'string' ? c : (COLORS[c] || c); }
+  function canvasSize() { return Math.max(200, Math.min(window.innerWidth - 420, window.innerHeight - 40)); }
+  function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
+  function makeBtn(text, onClick) { const b = el('button','btn',text); b.onclick = onClick; return b; }
+  function getGridPos(e) {
+    const rect = cv.getBoundingClientRect(); const scale = cv.width / rect.width;
+    const mx = (e.clientX - rect.left) * scale; const my = (e.clientY - rect.top) * scale;
+    const cell = cv.width / WORLD;
+    return { x: Math.floor(mx/cell), y: Math.floor(my/cell), cell };
+  }
+  function clampSprite(s) {
+    const sz = s.size || DEFAULT_SPRITE_SIZE;
+    s.x = Math.max(0, Math.min(WORLD - sz, s.x)); s.y = Math.max(0, Math.min(WORLD - sz, s.y));
+  }
+  function findFreeSpot(size, game, ignoreSprite) {
+    const placed = game.sprites.filter(s => s.placed && s !== ignoreSprite);
+    for (let y = 0; y <= WORLD - size; y++) for (let x = 0; x <= WORLD - size; x++) {
+      let overlaps = false;
+      for (const p of placed) { const pSize = p.size || DEFAULT_SPRITE_SIZE; if (x < p.x + pSize && x + size > p.x && y < p.y + pSize && y + size > p.y) { overlaps = true; break; } }
+      if (!overlaps) return { x, y };
+    }
+    return { x: 0, y: 0 };
+  }
+  function uniqueName(base, game) { if (!game.sprites.some(s => s.name === base)) return base; let i = 2; while (game.sprites.some(s => s.name === base + '_' + i)) i++; return base + '_' + i; }
+  function uniqueAnimName(base, game) { const arr = game.animations || []; if (!arr.some(a => a.name === base)) return base; let i = 2; while (arr.some(a => a.name === base + '_' + i)) i++; return base + '_' + i; }
+  function floodFill(pixels, x, y, target, replacement) {
+    const n = pixels.length; if (x < 0 || y < 0 || x >= n || y >= n) return;
+    if (target === replacement) return;
+    const stack = [[x, y]]; const visited = new Set();
+    while (stack.length) {
+      const [cx, cy] = stack.pop();
+      if (cx < 0 || cy < 0 || cx >= n || cy >= n) continue;
+      const key = cy * n + cx; if (visited.has(key)) continue; visited.add(key);
+      if (pixels[cy][cx] !== target) continue; pixels[cy][cx] = replacement;
+      stack.push([cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]);
+    }
+  }
+  function normalizeKeyFromEvent(k) {
+    if (k === ' ') return 'Space'; if (k === 'Escape') return 'Escape'; if (k === 'Enter') return 'Enter';
+    if (k === 'Tab') return 'Tab'; if (k === 'Backspace') return 'Backspace'; if (k === 'Shift') return 'Shift';
+    if (k === 'Control') return 'Ctrl'; if (k === 'Alt') return 'Alt';
+    if (k === 'ArrowUp') return 'Up'; if (k === 'ArrowDown') return 'Down';
+    if (k === 'ArrowLeft') return 'Left'; if (k === 'ArrowRight') return 'Right';
+    if (k.length === 1) return k.toUpperCase(); return null;
+  }
+  function normalizeKeyName(k) {
+    const lower = k.toLowerCase();
+    if (lower === 'space') return 'Space'; if (lower === 'enter' || lower === 'return') return 'Enter';
+    if (lower === 'escape' || lower === 'esc') return 'Escape'; if (lower === 'tab') return 'Tab';
+    if (lower === 'backspace') return 'Backspace'; if (lower === 'shift') return 'Shift';
+    if (lower === 'ctrl' || lower === 'control') return 'Ctrl'; if (lower === 'alt') return 'Alt';
+    if (lower === 'up' || lower === 'arrowup') return 'Up'; if (lower === 'down' || lower === 'arrowdown') return 'Down';
+    if (lower === 'left' || lower === 'arrowleft') return 'Left'; if (lower === 'right' || lower === 'arrowright') return 'Right';
+    if (k.length === 1) return k.toUpperCase(); return k;
+  }
+  function isKeyPressed(name, hold) {
+    const k = normalizeKeyName(name);
+    if (hold) return keysPressed.has(k);
+    if (keysPending.has(k)) { keysPending.delete(k); return true; }
+    return false;
+  }
+  function spritesConnected(a, b) {
+    if (!a || !b || a.deleted || b.deleted) return false;
+    if (a.collision === false || b.collision === false) return false;
+    const aSize = a.size || DEFAULT_SPRITE_SIZE; const bSize = b.size || DEFAULT_SPRITE_SIZE;
+    if (a.x + aSize <= b.x || b.x + bSize <= a.x || a.y + aSize <= b.y || b.y + bSize <= a.y) return false;
+    for (let ay = 0; ay < aSize; ay++) {
+      if (!a.pixels[ay]) continue;
+      for (let ax = 0; ax < aSize; ax++) {
+        if (!a.pixels[ay][ax]) continue;
+        const wx = a.x + ax, wy = a.y + ay; const bx = wx - b.x, by = wy - b.y;
+        if (bx >= 0 && bx < bSize && by >= 0 && by < bSize && b.pixels[by] && b.pixels[by][bx]) return true;
+      }
+    }
+    return false;
+  }
+  function collectPixelsById(id) {
+    const arr = [];
+    for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++)
+      if (worldPixId[y][x] === id) arr.push({ x, y, color: world[y][x], id: worldPixId[y][x], hidden: worldPixHidden[y][x] });
+    return arr;
+  }
+  function clearPixels(list) { for (const p of list) { world[p.y][p.x] = null; worldPixId[p.y][p.x] = null; worldPixHidden[p.y][p.x] = false; } }
+  function placePixels(list) {
+    for (const p of list) {
+      const nx = p.x, ny = p.y;
+      if (nx >= 0 && nx < WORLD && ny >= 0 && ny < WORLD) { world[ny][nx] = p.color; worldPixId[ny][nx] = p.id; worldPixHidden[ny][nx] = p.hidden; }
+    }
+  }
+  function parseAllArgs(line, name) {
+    let m = line.match(new RegExp('^all\\.' + name + '\\s*$')); if (m) return { args: [] };
+    m = line.match(new RegExp('^all\\.' + name + '\\s*\\((.*)\\)$'));
+    if (m) { const raw = m[1].trim(); if (!raw) return { args: [] }; return { args: splitArgs(raw) }; }
+    return null;
+  }
+  function parseAllCallArgs(line, name) { const m = line.match(new RegExp('^all\\.' + name + '\\s*\\((.*)\\)$')); if (!m) return null; return { args: splitArgs(m[1]) }; }
+  function evalAllExceptions(argStrings, ctxObj) {
+    const set = new Set();
+    for (const a of argStrings) { try { const v = String(evalExpr(a, ctxObj)).replace(/^"|"$/g, ''); if (v) set.add(v); } catch (e) {} }
+    return set;
+  }
+
+  let saveTimeout = null;
+  function scheduleSave() { if (saveTimeout) clearTimeout(saveTimeout); saveTimeout = setTimeout(doSave, 300); }
+  function doSave() {
+    const gamesMeta = games.map(g => ({
+      name: g.name, globalScript: g.globalScript, worldSize: g.worldSize || DEFAULT_WORLD,
+      sprites: g.sprites.map(s => ({ name: s.name, pixels: encodePixels(s.pixels), size: s.size || DEFAULT_SPRITE_SIZE, x: s.x, y: s.y, placed: !!s.placed, deleted: !!s.deleted, script: s.script || '', tags: (s.tags || []).slice() })),
+      animations: (g.animations || []).map(a => ({ name: a.name, size: a.size, frames: a.frames.map(f => ({ pixels: encodePixels(f.pixels), duration: f.duration })) }))
+    }));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(gamesMeta)); } catch (e) { console.warn('LEDame: память переполнена'); }
+  }
+  function loadSavedGames() {
+    try { for (const k of LEGACY_KEYS) localStorage.removeItem(k); } catch (e) {}
+    try {
+      const toRem = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('ledame_snd_') || k.startsWith('ledame_games_v1') || k.startsWith('ledame_games_v2'))) toRem.push(k);
+      }
+      for (const k of toRem) localStorage.removeItem(k);
+    } catch (e) {}
+    let raw = null; try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    if (!raw) return [];
+    let parsed; try { parsed = JSON.parse(raw); } catch (e) { return []; }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(g => ({
+      name: g.name || 'game', globalScript: g.globalScript || '',
+      worldSize: Math.max(MIN_WORLD, Math.min(MAX_WORLD, Number(g.worldSize) || DEFAULT_WORLD)),
+      sprites: (g.sprites || []).map(s => {
+        const size = s.size || DEFAULT_SPRITE_SIZE;
+        return { name: s.name || 'sprite', pixels: decodePixels(s.pixels, size), size, x: s.x || 0, y: s.y || 0, placed: !!s.placed, deleted: !!s.deleted, script: s.script || '', tags: Array.isArray(s.tags) ? s.tags.filter(t => /^[A-Za-z_]\w*$/.test(t)) : [] };
+      }),
+      animations: (g.animations || []).map(a => {
+        const size = a.size || DEFAULT_SPRITE_SIZE;
+        return { name: a.name || 'anim', size, frames: (a.frames || []).map(f => ({ pixels: decodePixels(f.pixels, size), duration: Number.isFinite(f.duration) ? Math.max(10, Math.round(f.duration)) : 100 })) };
+      })
+    }));
+  }
+
+  function renderMenu() {
+    right.innerHTML = '';
+    if (games.length > 0) {
+      right.appendChild(el('h3', null, 'Игры · ' + games.length));
+      for (const g of games) {
+        const item = el('div', 'sprite-item');
+        const nameSpan = el('span', 'name clickable', g.name + ' · ' + (g.worldSize || DEFAULT_WORLD) + '×' + (g.worldSize || DEFAULT_WORLD));
+        nameSpan.onclick = () => { currentGame = g; syncWorldFromGame(); state = 'editor'; renderAll(); };
+        item.appendChild(nameSpan);
+        const actions = el('div', 'actions');
+        const exp = el('span', 'plus', '💾'); exp.title = 'Сохранить в .led';
+        exp.onclick = (ev) => { ev.stopPropagation(); exportGameFile(g); showToast('Сохранено в ' + g.name + '.led'); };
+        actions.appendChild(exp);
+        const playBtn = el('span', 'plus play', '▶'); playBtn.onclick = () => { currentGame = g; startGame(); };
+        actions.appendChild(playBtn);
+        const delBtn = el('span', 'plus danger', '×');
+        delBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          const ok = await showConfirm('Удаление', 'Удалить игру "' + g.name + '"?'); if (!ok) return;
+          games = games.filter(x => x !== g); if (currentGame === g) currentGame = null;
+          scheduleSave(); renderAll();
+        };
+        actions.appendChild(delBtn); item.appendChild(actions); right.appendChild(item);
+      }
+    }
+    right.appendChild(makeBtn('+ create LEDame', async () => {
+      const name = await showPrompt('Название новой игры', 'my game');
+      if (!name || !name.trim()) return;
+      const g = { name: name.trim(), worldSize: DEFAULT_WORLD, sprites: [], animations: [], globalScript: '' };
+      games.push(g); currentGame = g; syncWorldFromGame(); scheduleSave(); state = 'editor'; renderAll();
+    }));
+    right.appendChild(makeBtn('📁 загрузить игру из файла (.led)', () => importGameFromFile()));
+    right.appendChild(makeBtn('🎵 редактор музыки', () => { musicReturnTo = 'menu'; state = 'musicList'; renderAll(); }));
+    const hint = el('div', 'hint'); hint.style.marginTop = '20px';
+    hint.textContent = 'Кликни по названию — открыть редактор. ▶ — играть. 💾 — сохранить в файл.';
+    right.appendChild(hint);
+  }
+
+  function renderMusicList() {
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, 'Музыка · ' + music.length));
+    right.appendChild(makeBtn('← Назад', () => { editingMusic = null; editingMusicOriginal = null; musicGrid = null; state = musicReturnTo; renderAll(); }));
+    right.appendChild(makeBtn('+ создать трек', () => { editingMusic = { name: '', bpm: 120 }; editingMusicOriginal = null; musicGrid = emptyGrid(); state = 'musicEditor'; renderAll(); }));
+    if (music.length === 0) { const empty = el('div', 'hint'); empty.textContent = 'Пусто. Создай первый трек и играй через sound(имя).'; right.appendChild(empty); }
+    else {
+      for (const m of music) {
+        const item = el('div', 'sprite-item');
+        item.appendChild(el('span', 'name', m.name + ' (' + m.notes.length + ' нот)'));
+        const actions = el('div', 'actions');
+        const play = el('span', 'plus play', '▶'); play.onclick = () => playMusicTrack(m, 0.4); actions.appendChild(play);
+        const edit = el('span', 'plus warn', '✎');
+        edit.onclick = () => { editingMusicOriginal = m; editingMusic = { name: m.name, bpm: m.bpm || 120 }; musicGrid = notesToGrid(m.notes); state = 'musicEditor'; renderAll(); };
+        actions.appendChild(edit);
+        const del = el('span', 'plus danger', '×');
+        del.onclick = async () => { const ok = await showConfirm('Удаление', 'Удалить трек "' + m.name + '"?'); if (!ok) return; music = music.filter(x => x !== m); scheduleMusicSave(); renderAll(); };
+        actions.appendChild(del); item.appendChild(actions); right.appendChild(item);
+      }
+    }
+    const hint = el('div', 'hint'); hint.style.marginTop = '12px';
+    hint.innerHTML = 'Клик ✎ — редактировать. ▶ — прослушать.<br>В игре вызывай через <b>sound(имя)</b>.';
+    right.appendChild(hint);
+  }
+
+  function renderMusicEditor() {
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, editingMusicOriginal ? 'Редактирование трека' : 'Новый трек'));
+    if (editingMusicOriginal) right.appendChild(el('div', 'mode-badge', '✎ ИЗМЕНЕНИЕ · ' + editingMusicOriginal.name));
+    const nameInput = el('input'); nameInput.type = 'text'; nameInput.placeholder = 'Имя трека';
+    nameInput.value = editingMusic.name || ''; nameInput.oninput = () => { editingMusic.name = nameInput.value; };
+    right.appendChild(nameInput);
+    right.appendChild(el('h3', null, 'Темп (BPM)'));
+    const bpmInput = el('input'); bpmInput.type = 'number'; bpmInput.min = '40'; bpmInput.max = '300';
+    bpmInput.value = String(editingMusic.bpm || 120);
+    bpmInput.oninput = () => { const v = Number(bpmInput.value); if (isFinite(v) && v >= 40 && v <= 300) editingMusic.bpm = Math.round(v); };
+    right.appendChild(bpmInput);
+    right.appendChild(el('h3', null, 'Управление'));
+    right.appendChild(makeBtn('▶ прослушать', () => {
+      const notes = gridToNotes(musicGrid); if (!notes.length) { showToast('Пусто'); return; }
+      playMusicTrack({ name: editingMusic.name, bpm: editingMusic.bpm, notes }, 0.4);
+    }));
+    right.appendChild(makeBtn('🧹 очистить', async () => { const ok = await showConfirm('Очистка', 'Убрать все ноты?', 'Очистить'); if (!ok) return; musicGrid = emptyGrid(); renderMusicEditorCanvas(); }));
+    right.appendChild(el('h3', null, 'Действия'));
+    right.appendChild(makeBtn('✓ Сохранить', async () => {
+      const nm = (editingMusic.name || '').trim();
+      if (!nm) { showAlert('Ошибка', 'Введите имя трека'); return; }
+      const notes = gridToNotes(musicGrid);
+      if (editingMusicOriginal) {
+        const idx = music.indexOf(editingMusicOriginal);
+        if (music.some((m, i) => i !== idx && m.name === nm)) { showAlert('Ошибка', 'Трек с таким именем уже есть'); return; }
+        editingMusicOriginal.name = nm; editingMusicOriginal.bpm = editingMusic.bpm; editingMusicOriginal.notes = notes;
+      } else {
+        if (music.some(m => m.name === nm)) { showAlert('Ошибка', 'Трек с таким именем уже есть'); return; }
+        music.push({ name: nm, bpm: editingMusic.bpm, notes });
+      }
+      scheduleMusicSave(); editingMusic = null; editingMusicOriginal = null; musicGrid = null; state = 'musicList'; renderAll();
+    }));
+    right.appendChild(makeBtn('Отмена', () => { editingMusic = null; editingMusicOriginal = null; musicGrid = null; state = 'musicList'; renderAll(); }));
+    const hint = el('div', 'hint'); hint.style.marginTop = '12px';
+    hint.innerHTML = '<b>Клик по клетке</b> — поставить/убрать ноту<br><b>Зажми и веди</b> — ставить много нот подряд';
+    right.appendChild(hint);
+  }
+
+  function renderEditor() {
+    if (!currentGame) { state = 'menu'; renderAll(); return; }
+    const g = currentGame;
+    if (!g.animations) g.animations = [];
+    if (!g.worldSize) g.worldSize = DEFAULT_WORLD;
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, g.name));
+    right.appendChild(makeBtn('← Exit LEDditor', () => { currentGame = null; state = 'menu'; renderAll(); }));
+    right.appendChild(makeBtn('▶ start LED-simulation', () => { startGame(); }));
+    right.appendChild(makeBtn('💾 сохранить игру в файл (.led)', () => { exportGameFile(g); showToast('Сохранено в ' + ((g.name || 'game').replace(/[^\w\-]/g, '_')) + '.led'); }));
+    right.appendChild(el('h3', null, 'Размер поля · ' + g.worldSize + '×' + g.worldSize));
+    const worldRow = el('div', 'size-row');
+    for (const sz of [12, 16, 20, 24, 32, 48]) {
+      const b = makeBtn(String(sz), () => { setWorldSize(sz); renderAll(); });
+      if (g.worldSize === sz) { b.style.borderColor = '#4a8fdc'; b.style.boxShadow = '0 0 10px #4a8fdc66'; }
+      worldRow.appendChild(b);
+    }
+    right.appendChild(worldRow);
+    const customWorldRow = el('div', 'custom-size-row');
+    const customWorldInput = el('input'); customWorldInput.type = 'number';
+    customWorldInput.min = String(MIN_WORLD); customWorldInput.max = String(MAX_WORLD);
+    customWorldInput.value = String(g.worldSize); customWorldInput.title = 'От ' + MIN_WORLD + ' до ' + MAX_WORLD;
+    const applyWorldBtn = el('button', 'btn', 'OK');
+    applyWorldBtn.onclick = () => {
+      const v = parseInt(customWorldInput.value, 10);
+      if (!isFinite(v) || v < MIN_WORLD || v > MAX_WORLD) { showAlert('Ошибка', 'Размер от ' + MIN_WORLD + ' до ' + MAX_WORLD); return; }
+      setWorldSize(v); renderAll();
+    };
+    customWorldRow.appendChild(customWorldInput); customWorldRow.appendChild(applyWorldBtn);
+    right.appendChild(customWorldRow);
+    right.appendChild(makeBtn('+ create sprite', () => {
+      editingSpriteOriginal = null;
+      editingSprite = { name: '', pixels: Array.from({length: DEFAULT_SPRITE_SIZE}, () => Array(DEFAULT_SPRITE_SIZE).fill(null)), tags: [], color: COLORS.white, tool: 'draw' };
+      state = 'spriteCreator'; renderAll();
+    }));
+    right.appendChild(makeBtn('🎬 анимации (' + g.animations.length + ')', () => { state = 'animationList'; renderAll(); }));
+    right.appendChild(makeBtn('🎵 редактор музыки', () => { musicReturnTo = 'editor'; state = 'musicList'; renderAll(); }));
+    right.appendChild(el('h3', null, 'Инструмент'));
+    const toolRow = el('div'); toolRow.style.display = 'flex'; toolRow.style.gap = '6px';
+    const moveBtn = makeBtn('✥ Двигать', () => { editorTool = 'move'; renderAll(); });
+    moveBtn.style.flex = '1'; moveBtn.style.textAlign = 'center';
+    if (editorTool === 'move') moveBtn.classList.add('active'); toolRow.appendChild(moveBtn);
+    const coordBtn = makeBtn('⊕ Координаты', () => { editorTool = 'coord'; renderAll(); });
+    coordBtn.style.flex = '1'; coordBtn.style.textAlign = 'center';
+    if (editorTool === 'coord') coordBtn.classList.add('active'); toolRow.appendChild(coordBtn);
+    right.appendChild(toolRow);
+    right.appendChild(el('h3', null, 'Скрипты'));
+    const gi = el('div', 'sprite-item');
+    gi.appendChild(el('span', 'name', 'globalscriptservice'));
+    const gplus = el('span', 'plus', '+');
+    gplus.onclick = () => { editingScript = { type: 'global' }; state = 'scriptEditor'; renderAll(); };
+    gi.appendChild(gplus); right.appendChild(gi);
+    const placed = g.sprites.filter(s => s.placed);
+    right.appendChild(el('h3', null, 'В игре · ' + placed.length));
+    if (placed.length === 0) { const empty = el('div', 'hint'); empty.textContent = 'Ничего не размещено.'; right.appendChild(empty); }
+    else for (const s of placed) right.appendChild(makeSpriteRow(s, g, true));
+    const library = g.sprites.filter(s => !s.placed);
+    right.appendChild(el('h3', null, 'Библиотека · ' + library.length));
+    if (library.length === 0) { const empty = el('div', 'hint'); empty.textContent = 'Пусто. Создайте спрайт.'; right.appendChild(empty); }
+    else for (const s of library) right.appendChild(makeSpriteRow(s, g, false));
+  }
+
+  function renderAnimationList() {
+    if (!currentGame) { state = 'menu'; renderAll(); return; }
+    if (!currentGame.animations) currentGame.animations = [];
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, 'Анимации · ' + currentGame.animations.length));
+    right.appendChild(makeBtn('← Назад', () => { state = 'editor'; renderAll(); }));
+    right.appendChild(makeBtn('+ create animation', () => {
+      editingAnimationOriginal = null;
+      editingAnimation = { name: '', size: DEFAULT_SPRITE_SIZE, frames: [makeEmptyFrame(DEFAULT_SPRITE_SIZE)] };
+      editingAnimationFrameIndex = 0; animationPaletteColor = COLORS.white; animationTool = 'draw';
+      state = 'animationEditor'; renderAll();
+    }));
+    if (currentGame.animations.length === 0) { const empty = el('div', 'hint'); empty.textContent = 'Пусто. Создай первую анимацию.'; right.appendChild(empty); }
+    else {
+      for (const a of currentGame.animations) {
+        const item = el('div', 'sprite-item');
+        item.appendChild(el('span', 'name', a.name + ' (' + a.frames.length + ' кадров)'));
+        const actions = el('div', 'actions');
+        const edit = el('span', 'plus warn', '✎');
+        edit.onclick = () => {
+          editingAnimationOriginal = a;
+          editingAnimation = { name: a.name, size: a.size, frames: a.frames.map(f => ({ pixels: f.pixels.map(r => r.slice()), duration: f.duration })) };
+          editingAnimationFrameIndex = 0; animationPaletteColor = COLORS.white; animationTool = 'draw';
+          state = 'animationEditor'; renderAll();
+        };
+        actions.appendChild(edit);
+        const del = el('span', 'plus danger', '×');
+        del.onclick = async () => { const ok = await showConfirm('Удаление', 'Удалить анимацию "' + a.name + '"?'); if (!ok) return; currentGame.animations = currentGame.animations.filter(x => x !== a); scheduleSave(); renderAll(); };
+        actions.appendChild(del); item.appendChild(actions); right.appendChild(item);
+      }
+    }
+    const hint = el('div', 'hint'); hint.style.marginTop = '12px';
+    hint.innerHTML = 'В скрипте спрайта:<br><b>anim.имя.play()</b> — запустить<br><b>anim.имя.stop()</b> — остановить';
+    right.appendChild(hint);
+  }
+
+  function renderAnimationEditor() {
+    if (!currentGame || !editingAnimation) { state = 'menu'; renderAll(); return; }
+    if (animationPreviewTimer) { clearTimeout(animationPreviewTimer); clearInterval(animationPreviewTimer); animationPreviewTimer = null; }
+    paletteEl.innerHTML = ''; paletteEl.style.display = 'flex';
+    const eraser = el('div', 'color-swatch' + (animationTool === 'draw' && animationPaletteColor === null ? ' active' : ''));
+    eraser.style.background = 'repeating-linear-gradient(45deg, #2a2a2a 0 6px, #4a4a4a 6px 12px)';
+    eraser.onclick = () => { animationTool = 'draw'; animationPaletteColor = null; renderAll(); };
+    paletteEl.appendChild(eraser);
+    for (const key of COLOR_KEYS) {
+      const sw = el('div', 'color-swatch' + (animationTool === 'draw' && animationPaletteColor === COLORS[key] ? ' active' : ''));
+      sw.style.background = COLORS[key]; sw.title = key;
+      sw.onclick = () => { animationTool = 'draw'; animationPaletteColor = COLORS[key]; renderAll(); };
+      paletteEl.appendChild(sw);
+    }
+    const fillBtn = el('div', 'fill-btn' + (animationTool === 'fill' ? ' active' : ''), 'Заливка');
+    fillBtn.onclick = () => { animationTool = 'fill'; renderAll(); };
+    paletteEl.appendChild(fillBtn);
+
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, editingAnimationOriginal ? 'Редактирование анимации' : 'Новая анимация'));
+    if (editingAnimationOriginal) right.appendChild(el('div', 'mode-badge', '✎ ИЗМЕНЕНИЕ · ' + editingAnimationOriginal.name));
+    const nameInput = el('input'); nameInput.type = 'text'; nameInput.placeholder = 'Имя анимации';
+    nameInput.value = editingAnimation.name || ''; nameInput.oninput = () => { editingAnimation.name = nameInput.value; };
+    right.appendChild(nameInput);
+    right.appendChild(el('h3', null, 'Размер кадра · ' + editingAnimation.size + '×' + editingAnimation.size));
+    const sizeRow = el('div', 'size-row');
+    for (const sz of [4, 6, 8, 10, 12, 16, 20, 24]) {
+      const b = makeBtn(String(sz), () => { resizeAnimationSize(sz); renderAll(); });
+      if (editingAnimation.size === sz) { b.style.borderColor = '#4a8fdc'; b.style.boxShadow = '0 0 10px #4a8fdc66'; }
+      sizeRow.appendChild(b);
+    }
+    right.appendChild(sizeRow);
+    const customSizeRow = el('div', 'custom-size-row');
+    const customSizeInput = el('input'); customSizeInput.type = 'number';
+    customSizeInput.min = String(MIN_SPRITE_SIZE); customSizeInput.max = String(MAX_SPRITE_SIZE);
+    customSizeInput.value = String(editingAnimation.size);
+    const applySizeBtn = el('button', 'btn', 'OK');
+    applySizeBtn.onclick = () => {
+      const v = parseInt(customSizeInput.value, 10);
+      if (!isFinite(v) || v < MIN_SPRITE_SIZE || v > MAX_SPRITE_SIZE) { showAlert('Ошибка', 'Размер от ' + MIN_SPRITE_SIZE + ' до ' + MAX_SPRITE_SIZE); return; }
+      resizeAnimationSize(v); renderAll();
+    };
+    customSizeRow.appendChild(customSizeInput); customSizeRow.appendChild(applySizeBtn);
+    right.appendChild(customSizeRow);
+    right.appendChild(el('h3', null, 'Кадры · ' + editingAnimation.frames.length));
+    const strip = el('div', 'frame-strip');
+    editingAnimation.frames.forEach((f, i) => {
+      const chip = el('div', 'frame-chip' + (i === editingAnimationFrameIndex ? ' active' : ''), String(i + 1));
+      chip.onclick = () => { editingAnimationFrameIndex = i; renderAll(); };
+      strip.appendChild(chip);
+    });
+    right.appendChild(strip);
+    const frameBtns = el('div'); frameBtns.style.display = 'flex'; frameBtns.style.gap = '6px';
+    const addF = makeBtn('+ кадр', () => {
+      const idx = editingAnimationFrameIndex + 1;
+      editingAnimation.frames.splice(idx, 0, makeEmptyFrame(editingAnimation.size));
+      editingAnimationFrameIndex = idx; renderAll();
+    });
+    addF.style.flex = '1'; addF.style.textAlign = 'center'; frameBtns.appendChild(addF);
+    const dupF = makeBtn('⧉ копия', () => {
+      const cur = editingAnimation.frames[editingAnimationFrameIndex];
+      const idx = editingAnimationFrameIndex + 1;
+      editingAnimation.frames.splice(idx, 0, { pixels: cur.pixels.map(r => r.slice()), duration: cur.duration });
+      editingAnimationFrameIndex = idx; renderAll();
+    });
+    dupF.style.flex = '1'; dupF.style.textAlign = 'center'; frameBtns.appendChild(dupF);
+    right.appendChild(frameBtns);
+    const importFromSpriteBtn = el('button', 'btn', '📥 кадр из спрайта');
+    importFromSpriteBtn.style.textAlign = 'center';
+    importFromSpriteBtn.onclick = async () => {
+      const spr = currentGame.sprites || [];
+      if (!spr.length) { showAlert('Нет спрайтов', 'Сначала создай хотя бы один спрайт в LEDditor.'); return; }
+      const choices = [];
+      for (let i = 0; i < Math.min(spr.length, 30); i++) choices.push({ label: spr[i].name, value: spr[i].name });
+      choices.push({ label: 'Отмена', value: null, danger: true });
+      const picked = await showChoice('Кадр из спрайта', 'Выбери спрайт:', choices);
+      if (!picked) return;
+      const proto = spr.find(s => s.name === picked); if (!proto) return;
+      const newPixels = importSpriteToFrame(proto);
+      const idx = editingAnimationFrameIndex + 1;
+      editingAnimation.frames.splice(idx, 0, { pixels: newPixels, duration: 100 });
+      editingAnimationFrameIndex = idx; renderAll();
+      showToast('Спрайт "' + picked + '" добавлен как кадр');
+    };
+    right.appendChild(importFromSpriteBtn);
+    if (editingAnimation.frames.length > 1) {
+      const delF = makeBtn('× удалить кадр', () => {
+        editingAnimation.frames.splice(editingAnimationFrameIndex, 1);
+        if (editingAnimationFrameIndex >= editingAnimation.frames.length) editingAnimationFrameIndex = editingAnimation.frames.length - 1;
+        renderAll();
+      });
+      delF.style.borderColor = '#a03030'; delF.style.color = '#ffb0b0';
+      right.appendChild(delF);
+    }
+    right.appendChild(el('h3', null, 'Длительность кадра (мс)'));
+    const durInput = el('input'); durInput.type = 'number'; durInput.min = '10'; durInput.max = '10000';
+    durInput.value = String(editingAnimation.frames[editingAnimationFrameIndex].duration || 100);
+    durInput.oninput = () => { const v = Number(durInput.value); if (isFinite(v) && v >= 10 && v <= 10000) editingAnimation.frames[editingAnimationFrameIndex].duration = Math.round(v); };
+    right.appendChild(durInput);
+    right.appendChild(el('h3', null, 'Действия'));
+    right.appendChild(makeBtn('▶ превью', () => {
+      if (animationPreviewTimer) { clearTimeout(animationPreviewTimer); clearInterval(animationPreviewTimer); animationPreviewTimer = null; }
+      let idx = 0; editingAnimationFrameIndex = 0; renderAnimationEditorCanvas();
+      function step() {
+        const dur = editingAnimation.frames[idx].duration || 100;
+        animationPreviewTimer = setTimeout(() => {
+          if (!editingAnimation) return;
+          idx = (idx + 1) % editingAnimation.frames.length; editingAnimationFrameIndex = idx;
+          renderAnimationEditorCanvas(); step();
+        }, dur);
+      }
+      step();
+    }));
+    if (editingAnimationOriginal) {
+      right.appendChild(makeBtn('✓ Сохранить изменения', async () => {
+        const nm = (editingAnimation.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя анимации'); return; }
+        if (currentGame.animations.some(a => a !== editingAnimationOriginal && a.name === nm)) { showAlert('Ошибка', 'Анимация с таким именем уже есть'); return; }
+        const orig = editingAnimationOriginal;
+        orig.name = nm; orig.size = editingAnimation.size;
+        orig.frames = editingAnimation.frames.map(f => ({ pixels: f.pixels.map(r => r.slice()), duration: f.duration }));
+        scheduleSave(); cleanupAnimationEditor(); state = 'animationList'; renderAll();
+      }));
+      right.appendChild(makeBtn('Сохранить как копию', async () => {
+        const nm = (editingAnimation.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя анимации'); return; }
+        const targetName = currentGame.animations.some(a => a.name === nm) ? uniqueAnimName(nm + '_copy', currentGame) : nm;
+        currentGame.animations.push({ name: targetName, size: editingAnimation.size, frames: editingAnimation.frames.map(f => ({ pixels: f.pixels.map(r => r.slice()), duration: f.duration })) });
+        scheduleSave(); cleanupAnimationEditor(); state = 'animationList'; renderAll();
+      }));
+    } else {
+      right.appendChild(makeBtn('✓ Сохранить', async () => {
+        const nm = (editingAnimation.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя анимации'); return; }
+        if (currentGame.animations.some(a => a.name === nm)) { showAlert('Ошибка', 'Анимация с таким именем уже есть'); return; }
+        currentGame.animations.push({ name: nm, size: editingAnimation.size, frames: editingAnimation.frames.map(f => ({ pixels: f.pixels.map(r => r.slice()), duration: f.duration })) });
+        scheduleSave(); cleanupAnimationEditor(); state = 'animationList'; renderAll();
+      }));
+    }
+    right.appendChild(makeBtn('Отмена', () => { cleanupAnimationEditor(); state = 'animationList'; renderAll(); }));
+  }
+  function cleanupAnimationEditor() {
+    if (animationPreviewTimer) { clearTimeout(animationPreviewTimer); clearInterval(animationPreviewTimer); animationPreviewTimer = null; }
+    editingAnimation = null; editingAnimationOriginal = null; editingAnimationFrameIndex = 0;
+  }
+
+  function makeSpriteRow(s, game, isPlaced) {
+    const item = el('div', 'sprite-item');
+    item.style.flexDirection = 'column'; item.style.alignItems = 'stretch'; item.style.gap = '4px';
+    const topRow = el('div');
+    topRow.style.display = 'flex'; topRow.style.alignItems = 'center'; topRow.style.justifyContent = 'space-between'; topRow.style.gap = '6px';
+    const nameEl = el('span', 'name', s.name + ' (' + (s.size||DEFAULT_SPRITE_SIZE) + ')');
+    nameEl.title = s.name + ((s.tags && s.tags.length) ? '\nТеги: ' + s.tags.join(', ') : '');
+    topRow.appendChild(nameEl);
+    const actions = el('div', 'actions');
+    const plus = el('span', 'plus', '+'); plus.onclick = () => { editingScript = { type: 'sprite', sprite: s }; state = 'scriptEditor'; renderAll(); }; actions.appendChild(plus);
+    const tagBtn = el('span', 'plus tag', '🏷');
+    tagBtn.onclick = async () => {
+      const v = await showPrompt('Теги для "' + s.name + '" (через запятую)', (s.tags || []).join(', '));
+      if (v === null) return;
+      s.tags = parseTags(v); scheduleSave(); renderAll();
+    };
+    actions.appendChild(tagBtn);
+    const edit = el('span', 'plus warn', '✎');
+    edit.onclick = () => { editingSpriteOriginal = s; editingSprite = { name: s.name, pixels: s.pixels.map(r => r.slice()), tags: (s.tags || []).slice(), color: COLORS.white, tool: 'draw' }; state = 'spriteCreator'; renderAll(); };
+    actions.appendChild(edit);
+    const copy = el('span', 'plus play', '⧉');
+    copy.onclick = () => {
+      const newName = uniqueName(s.name + '_copy', game);
+      game.sprites.push({ name: newName, pixels: s.pixels.map(r => r.slice()), size: s.size || DEFAULT_SPRITE_SIZE, x: 0, y: 0, placed: false, deleted: false, script: s.script, tags: (s.tags || []).slice() });
+      scheduleSave(); renderAll();
+    };
+    actions.appendChild(copy);
+    if (isPlaced) {
+      const unplace = el('span', 'plus', '←'); unplace.onclick = () => { s.placed = false; scheduleSave(); renderAll(); }; actions.appendChild(unplace);
+    } else {
+      const place = el('span', 'plus play', '▸'); place.onclick = () => { s.placed = true; const spot = findFreeSpot(s.size || DEFAULT_SPRITE_SIZE, game); s.x = spot.x; s.y = spot.y; scheduleSave(); renderAll(); }; actions.appendChild(place);
+    }
+    const del = el('span', 'plus danger', '×');
+    del.onclick = async () => { const ok = await showConfirm('Удаление', 'Удалить спрайт "' + s.name + '"?'); if (!ok) return; game.sprites = game.sprites.filter(x => x !== s); scheduleSave(); renderAll(); };
+    actions.appendChild(del);
+    topRow.appendChild(actions); item.appendChild(topRow);
+    if (s.tags && s.tags.length) {
+      const tagRow = el('div', 'sprite-tags');
+      for (const t of s.tags) tagRow.appendChild(el('span', 'tag-badge', t));
+      item.appendChild(tagRow);
+    }
+    return item;
+  }
+
+  function renderSpriteCreator() {
+    if (!currentGame) { state = 'menu'; renderAll(); return; }
+    const isEditMode = !!editingSpriteOriginal;
+    paletteEl.innerHTML = ''; paletteEl.style.display = 'flex';
+    const eraser = el('div', 'color-swatch' + (editingSprite.tool === 'draw' && editingSprite.color === null ? ' active' : ''));
+    eraser.style.background = 'repeating-linear-gradient(45deg, #2a2a2a 0 6px, #4a4a4a 6px 12px)';
+    eraser.onclick = () => { editingSprite.tool = 'draw'; editingSprite.color = null; renderAll(); };
+    paletteEl.appendChild(eraser);
+    for (const key of COLOR_KEYS) {
+      const sw = el('div', 'color-swatch' + (editingSprite.tool === 'draw' && editingSprite.color === COLORS[key] ? ' active' : ''));
+      sw.style.background = COLORS[key]; sw.title = key;
+      sw.onclick = () => { editingSprite.tool = 'draw'; editingSprite.color = COLORS[key]; renderAll(); };
+      paletteEl.appendChild(sw);
+    }
+    const fillBtn = el('div', 'fill-btn' + (editingSprite.tool === 'fill' ? ' active' : ''), 'Заливка');
+    fillBtn.onclick = () => { editingSprite.tool = 'fill'; renderAll(); };
+    paletteEl.appendChild(fillBtn);
+
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, isEditMode ? 'Редактирование спрайта' : 'Новый спрайт'));
+    if (isEditMode) right.appendChild(el('div', 'mode-badge', '✎ ИЗМЕНЕНИЕ · ' + editingSpriteOriginal.name));
+    const nameInput = el('input'); nameInput.type = 'text'; nameInput.placeholder = 'Имя спрайта';
+    nameInput.value = editingSprite.name || ''; nameInput.oninput = () => { editingSprite.name = nameInput.value; };
+    right.appendChild(nameInput);
+    right.appendChild(el('h3', null, 'Теги'));
+    const tagsInput = el('input'); tagsInput.type = 'text'; tagsInput.placeholder = 'player, enemy (через запятую)';
+    tagsInput.value = (editingSprite.tags || []).join(', ');
+    tagsInput.oninput = () => { editingSprite.tags = parseTags(tagsInput.value); };
+    right.appendChild(tagsInput);
+    right.appendChild(el('h3', null, 'Размер поля · ' + editingSprite.pixels.length + '×' + editingSprite.pixels.length));
+    const sizeRow = el('div', 'size-row');
+    for (const sz of [4, 6, 8, 10, 12, 16, 20, 24]) {
+      const b = makeBtn(String(sz), () => { resizeSpriteArray(sz); renderAll(); });
+      if (editingSprite.pixels.length === sz) { b.style.borderColor = '#4a8fdc'; b.style.boxShadow = '0 0 10px #4a8fdc66'; }
+      sizeRow.appendChild(b);
+    }
+    right.appendChild(sizeRow);
+    const customSizeRow = el('div', 'custom-size-row');
+    const customSizeInput = el('input'); customSizeInput.type = 'number';
+    customSizeInput.min = String(MIN_SPRITE_SIZE); customSizeInput.max = String(MAX_SPRITE_SIZE);
+    customSizeInput.value = String(editingSprite.pixels.length);
+    const applySizeBtn = el('button', 'btn', 'OK');
+    applySizeBtn.onclick = () => {
+      const v = parseInt(customSizeInput.value, 10);
+      if (!isFinite(v) || v < MIN_SPRITE_SIZE || v > MAX_SPRITE_SIZE) { showAlert('Ошибка', 'Размер от ' + MIN_SPRITE_SIZE + ' до ' + MAX_SPRITE_SIZE); return; }
+      resizeSpriteArray(v); renderAll();
+    };
+    customSizeRow.appendChild(customSizeInput); customSizeRow.appendChild(applySizeBtn);
+    right.appendChild(customSizeRow);
+    right.appendChild(makeBtn('Очистить поле', () => {
+      const n = editingSprite.pixels.length;
+      editingSprite.pixels = Array.from({length: n}, () => Array(n).fill(null));
+      renderSpriteCreatorCanvas();
+    }));
+    if (isEditMode) {
+      right.appendChild(makeBtn('✓ Сохранить изменения', async () => {
+        const nm = (editingSprite.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя спрайта'); return; }
+        if (currentGame.sprites.some(s => s !== editingSpriteOriginal && s.name === nm)) { showAlert('Ошибка', 'Спрайт с таким именем уже существует'); return; }
+        const orig = editingSpriteOriginal;
+        orig.name = nm; orig.pixels = editingSprite.pixels.map(r => r.slice()); orig.size = editingSprite.pixels.length;
+        orig.tags = (editingSprite.tags || []).slice(); clampSprite(orig);
+        scheduleSave(); editingSpriteOriginal = null; editingSprite = null; state = 'editor'; renderAll();
+      }));
+      right.appendChild(makeBtn('Сохранить как копию', async () => {
+        const nm = (editingSprite.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя спрайта'); return; }
+        const targetName = currentGame.sprites.some(s => s.name === nm) ? uniqueName(nm + '_copy', currentGame) : nm;
+        const sz = editingSprite.pixels.length;
+        currentGame.sprites.push({ name: targetName, pixels: editingSprite.pixels.map(r => r.slice()), size: sz, x: 0, y: 0, placed: false, deleted: false, script: '', tags: (editingSprite.tags || []).slice() });
+        scheduleSave(); editingSpriteOriginal = null; editingSprite = null; state = 'editor'; renderAll();
+      }));
+    } else {
+      right.appendChild(makeBtn('✓ Сохранить в библиотеку', async () => {
+        const nm = (editingSprite.name || '').trim();
+        if (!nm) { showAlert('Ошибка', 'Введите имя спрайта'); return; }
+        if (currentGame.sprites.some(s => s.name === nm)) { showAlert('Ошибка', 'Спрайт с таким именем уже существует'); return; }
+        const sz = editingSprite.pixels.length;
+        currentGame.sprites.push({ name: nm, pixels: editingSprite.pixels.map(r => r.slice()), size: sz, x: 0, y: 0, placed: false, deleted: false, script: '', tags: (editingSprite.tags || []).slice() });
+        scheduleSave(); editingSprite = null; state = 'editor'; renderAll();
+      }));
+    }
+    right.appendChild(makeBtn('Отмена', () => { editingSpriteOriginal = null; editingSprite = null; state = 'editor'; renderAll(); }));
+    const hint = el('div', 'hint'); hint.style.marginTop = '10px';
+    hint.innerHTML = 'ЛКМ — рисовать · ПКМ — стереть · Заливка';
+    right.appendChild(hint);
+  }
+
+  function resizeSpriteArray(newSize) {
+    const old = editingSprite.pixels; const oldSize = old.length;
+    const next = Array.from({length: newSize}, () => Array(newSize).fill(null));
+    const copy = Math.min(oldSize, newSize);
+    for (let y = 0; y < copy; y++) for (let x = 0; x < copy; x++) next[y][x] = old[y][x];
+    editingSprite.pixels = next;
+  }
+
+  function renderScriptEditor() {
+    if (!currentGame) { state = 'menu'; renderAll(); return; }
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, editingScript.type === 'global' ? 'globalscriptservice' : editingScript.sprite.name));
+    const ta = el('textarea'); ta.spellcheck = false;
+    ta.value = editingScript.type === 'global' ? currentGame.globalScript : editingScript.sprite.script;
+    ta.oninput = () => {
+      if (editingScript.type === 'global') currentGame.globalScript = ta.value;
+      else editingScript.sprite.script = ta.value;
+      scheduleSave();
+    };
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = ta.selectionStart, en = ta.selectionEnd;
+        ta.value = ta.value.slice(0, s) + '  ' + ta.value.slice(en);
+        ta.selectionStart = ta.selectionEnd = s + 2;
+        ta.dispatchEvent(new Event('input'));
+      }
+    });
+    const wrap = el('div', 'code-wrap');
+    const pre = el('pre');
+    function rehighlight() { pre.innerHTML = highlightCode(ta.value, currentGame, music); }
+    rehighlight();
+    wrap.appendChild(pre); wrap.appendChild(ta);
+    right.appendChild(wrap);
+    function syncScroll() { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+    ta.addEventListener('input', () => { rehighlight(); syncScroll(); });
+    ta.addEventListener('scroll', syncScroll);
+    right.appendChild(makeBtn('Назад', () => { state = 'editor'; renderAll(); }));
+
+    const colorsDetails = el('details', 'cmd-help');
+    colorsDetails.appendChild(el('summary', null, '🎨 Цвета подсветки'));
+    const colorDefs = [['kw','Ключевые (if, else, else...'],['bi','Встроенные'],['st','Строки'],['nm','Числа'],['cm','Комментарии'],['op','Операторы'],['var','Переменные'],['sprite','Спрайты'],['anim','Анимации'],['music','Музыка'],['tag','Теги']];
+    for (const [key, label] of colorDefs) {
+      const row = el('div', 'color-set-row');
+      row.appendChild(el('span', null, label));
+      const inp = document.createElement('input'); inp.type = 'color'; inp.value = syntaxColors[key] || '#ffffff';
+      inp.oninput = () => { syntaxColors[key] = inp.value; saveSyntaxColors(); applySyntaxColors(); rehighlight(); };
+      row.appendChild(inp); colorsDetails.appendChild(row);
+    }
+    const resetBtn = el('button', 'btn', '↺ Сбросить цвета');
+    resetBtn.style.marginTop = '6px'; resetBtn.style.textAlign = 'center';
+    resetBtn.onclick = () => { syntaxColors = Object.assign({}, DEFAULT_SYNTAX); saveSyntaxColors(); applySyntaxColors(); renderAll(); };
+    colorsDetails.appendChild(resetBtn); right.appendChild(colorsDetails);
+
+    const details = el('details', 'cmd-help');
+    details.appendChild(el('summary', null, '📖 Список команд'));
+    const hint = el('div', 'hint');
+    hint.innerHTML = [
+      '<b>⊕ Клик по полю слева → координаты (x, y)</b>',
+      'var x = 5  ·  x = "текст"  ·  x = True',
+      '<b>if LEDame.started</b> — только в самом начале игры',
+      '<b>if / elseif / else / end</b>',
+      '<b>while (...) ... end</b>',
+      '<b>break / continue</b> — в while',
+      'function foo() ... end',
+      'LEDame.pause / .exit / .update / .restart',
+      'TSprite.delete / .now / .hide / .show',
+      'TSprite.move(x, 1) / .pos(x, y)',
+      '<b>bu.delete / bu.move(x,1) / bu.x / bu.y</b>',
+      '<b>bu.gp</b> → "x,y"  ·  <b>bu.gp.x / bu.gp.y</b>',
+      '<b>bu.collision(True/False)</b> — вкл/выкл хитбокс',
+      '<b>bu.grab()</b> / <b>bu.grab(x, y)</b> / <b>bu.grab(x1, y1, x2, y2)</b>',
+      '<b>all.hide / all.show / all.move(x,1) / all.pos(x,y)</b>',
+      '<b>all.hide(bu, enemy)</b> — все КРОМЕ перечисленных',
+      '<b>tags.имя.pressed / .pressed(True)</b>',
+      '<b>tags.имя.delete / .hide / .now / .show</b>',
+      '<b>tags.имя.move(x,1) / .pos(x,y)</b>',
+      '<b>tags.имя.x / .y / .count</b>',
+      '<b>connected(a, b)</b> — работает с тегами',
+      '<b>anim.имя.play() / .stop()</b>',
+      '<b>rotation(90)</b> — повернуть спрайт',
+      'Spawn(name, x, y)  ·  Kill(name)',
+      'math score + 1 =:= score  ·  print(x)',
+      '<b>str текст + "!" =:= text</b> — строки',
+      '<b>Wait(500)</b> = полсекунды',
+      'createP(x, y, red, [id])  ·  DelP(x, y)',
+      'createT("hi", white, 2, 2, [id])',
+      '<b>sound(имя, [громкость], [скорость])</b>',
+      '<b>hold(мс, спрайт)</b>  ·  <b>released(спрайт)</b>',
+      'Spos(name)  ·  Scan(x, y)  ·  mpos.x / mpos.y',
+      '<b>mouse.Left / .Right / .Middle</b>',
+      '<b>key.Space / key.W(True) / ...</b>',
+      '<b>random(1, 10)</b>'
+    ].join('<br>');
+    details.appendChild(hint);
+    right.appendChild(details);
+  }
+
+  function renderPlaying() {
+    right.innerHTML = '';
+    right.appendChild(el('h3', null, 'Игра: ' + (currentGame ? currentGame.name : '') + ' · ' + WORLD + '×' + WORLD));
+    const hint = el('div', 'hint'); hint.style.lineHeight = '1.9';
+    hint.textContent = 'O — окно вывода  ·  Esc — выход';
+    right.appendChild(hint);
+    right.appendChild(makeBtn('Выйти в редактор', () => { gameRunning = false; gameGen++; logWin.style.display = 'none'; syncWorldFromGame(); state = 'editor'; renderAll(); }));
+  }
+
+  function drawLEDGrid(size, cols, rows) {
+    const cell = size / cols;
+    ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, size, size);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      ctx.beginPath(); ctx.arc(x*cell + cell/2, y*cell + cell/2, cell*0.36, 0, Math.PI*2);
+      ctx.fillStyle = '#111622'; ctx.fill();
+    }
+    return cell;
+  }
+  function renderMenuCanvas() { syncWorldFromGame(); const size = canvasSize(); if (cv.width !== size) { cv.width = size; cv.height = size; } drawLEDGrid(size, WORLD, WORLD); }
+  function renderSpriteCreatorCanvas() {
+    const maxSize = Math.min(window.innerWidth - 480, window.innerHeight - 80);
+    const n = editingSprite.pixels.length;
+    const cell = Math.max(16, Math.min(62, Math.floor(maxSize / n)));
+    const size = cell * n; if (cv.width !== size) { cv.width = size; cv.height = size; }
+    ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, size, size);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const cx = x*cell + cell/2, cy = y*cell + cell/2;
+      ctx.beginPath(); ctx.arc(cx, cy, cell*0.36, 0, Math.PI*2);
+      ctx.fillStyle = '#111622'; ctx.fill();
+      const col = editingSprite.pixels[y][x];
+      if (col) { ctx.beginPath(); ctx.arc(cx, cy, cell*0.4, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill(); }
+    }
+  }
+  function renderAnimationEditorCanvas() {
+    if (!editingAnimation) return;
+    const maxSize = Math.min(window.innerWidth - 480, window.innerHeight - 80);
+    const n = editingAnimation.size;
+    const cell = Math.max(16, Math.min(62, Math.floor(maxSize / n)));
+    const size = cell * n; if (cv.width !== size) { cv.width = size; cv.height = size; }
+    ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, size, size);
+    const frame = editingAnimation.frames[editingAnimationFrameIndex]; if (!frame) return;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const cx = x*cell + cell/2, cy = y*cell + cell/2;
+      ctx.beginPath(); ctx.arc(cx, cy, cell*0.36, 0, Math.PI*2);
+      ctx.fillStyle = '#111622'; ctx.fill();
+      const col = frame.pixels[y] && frame.pixels[y][x];
+      if (col) { ctx.beginPath(); ctx.arc(cx, cy, cell*0.4, 0, Math.PI*2); ctx.fillStyle = col; ctx.fill(); }
+    }
+  }
+  function drawPixelsAt(pixels, sz, x, y, cell) {
+    for (let sy = 0; sy < sz; sy++) for (let sx = 0; sx < sz; sx++) {
+      const c = pixels[sy] && pixels[sy][sx]; if (!c) continue;
+      const wx = x + sx, wy = y + sy;
+      if (wx < 0 || wx >= WORLD || wy < 0 || wy >= WORLD) continue;
+      ctx.beginPath(); ctx.arc(wx*cell + cell/2, wy*cell + cell/2, cell*0.4, 0, Math.PI*2);
+      ctx.fillStyle = c; ctx.fill();
+    }
+  }
+  function drawSprite(s, cell, outline) {
+    const sz = s.size || DEFAULT_SPRITE_SIZE;
+    drawPixelsAt(s.pixels, sz, s.x, s.y, cell);
+    if (outline) { ctx.strokeStyle = outline; ctx.lineWidth = 2; ctx.strokeRect(s.x*cell + 1, s.y*cell + 1, sz*cell - 2, sz*cell - 2); }
+  }
+  function renderEditorCanvas() {
+    if (!currentGame) return; syncWorldFromGame();
+    const size = canvasSize(); if (cv.width !== size) { cv.width = size; cv.height = size; }
+    const cell = drawLEDGrid(size, WORLD, WORLD);
+    for (const s of currentGame.sprites) { if (!s.placed || s.deleted) continue; drawSprite(s, cell, dragging === s ? '#7fc8ff' : '#ffffff26'); }
+    cv.className = dragging ? 'grabbing' : (editorTool === 'coord' ? 'picker' : (currentGame.sprites.some(s=>s.placed) ? 'draggable' : ''));
+  }
+  function renderScriptEditorCanvas() {
+    if (!currentGame) return; syncWorldFromGame();
+    const size = canvasSize(); if (cv.width !== size) { cv.width = size; cv.height = size; }
+    const cell = drawLEDGrid(size, WORLD, WORLD);
+    for (const s of currentGame.sprites) { if (!s.placed || s.deleted) continue; drawSprite(s, cell, '#ffffff26'); }
+    cv.className = 'picker';
+  }
+  function renderMusicEditorCanvas() {
+    const layout = musicEditorLayout();
+    if (cv.width !== layout.totalW) cv.width = layout.totalW;
+    if (cv.height !== layout.totalH) cv.height = layout.totalH;
+    ctx.fillStyle = '#0a0d14'; ctx.fillRect(0, 0, cv.width, cv.height);
+    const { cell, labelW } = layout;
+    for (let r = 0; r < MUSIC_ROWS; r++) {
+      const isSharp = isSharpRow(r);
+      const bg = isSharp ? '#0d1220' : '#111827'; const bgActive = isSharp ? '#5cd6ff' : '#a3f0c0';
+      const y = r * cell; const midi = MIDI_TOP - r;
+      ctx.fillStyle = isSharp ? '#40506a' : '#7fa8c8';
+      ctx.font = Math.floor(cell*0.5) + 'px "Courier New", monospace';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(midiToName(midi), labelW - 6, y + cell/2);
+      ctx.textAlign = 'left';
+      for (let c = 0; c < MUSIC_COLS; c++) {
+        const x = labelW + c * cell;
+        const active = musicGrid && musicGrid[r][c];
+        ctx.fillStyle = active ? bgActive : bg;
+        ctx.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+        if (c % 4 === 0) { ctx.fillStyle = '#3a4a6a'; ctx.fillRect(x, y, 1, cell); }
+      }
+      ctx.fillStyle = '#1a2030'; ctx.fillRect(labelW, y, MUSIC_COLS * cell, 1);
+    }
+    for (let c = 0; c <= MUSIC_COLS; c++) if (c % 4 === 0) { ctx.fillStyle = '#2a3a54'; ctx.fillRect(labelW + c * cell, 0, 1, MUSIC_ROWS * cell); }
+    cv.className = 'grid';
+  }
+  function renderGame() {
+    if (state !== 'playing') return;
+    const size = canvasSize(); if (cv.width !== size) { cv.width = size; cv.height = size; }
+    const cell = drawLEDGrid(size, WORLD, WORLD);
+    for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++) {
+      if (world[y] && world[y][x] && !worldPixHidden[y][x]) {
+        ctx.beginPath(); ctx.arc(x*cell + cell/2, y*cell + cell/2, cell*0.4, 0, Math.PI*2);
+        ctx.fillStyle = world[y][x]; ctx.fill();
+      }
+    }
+    const now = performance.now();
+    for (const s of sprites) {
+      if (s.deleted) continue;
+      if (s._anim) {
+        const anim = s._anim.animation;
+        const elapsed = now - s._anim.startTime;
+        const frame = pickFrame(anim.frames, elapsed);
+        if (frame) drawPixelsAt(frame.pixels, anim.size, s.x, s.y, cell);
+        else drawSprite(s, cell, null);
+      } else drawSprite(s, cell, null);
+    }
+    if (grabState && grabState.sprite && !grabState.sprite.deleted) {
+      ctx.strokeStyle = '#4a8fdc88'; ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      const gx = grabState.minX * cell;
+      const gy = grabState.minY * cell;
+      const gw = (grabState.maxX - grabState.minX) * cell;
+      const gh = (grabState.maxY - grabState.minY) * cell;
+      ctx.strokeRect(gx, gy, gw, gh);
+      ctx.setLineDash([]);
+    }
+    if (mouseDown) {
+      for (const s of sprites) {
+        if (s.deleted) continue;
+        const sz = s.size || DEFAULT_SPRITE_SIZE;
+        if (mouseX >= s.x && mouseX < s.x + sz && mouseY >= s.y && mouseY < s.y + sz) {
+          ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = 2;
+          ctx.strokeRect(s.x*cell, s.y*cell, sz*cell, sz*cell);
+        }
+      }
+    }
+    ctx.textBaseline = 'top';
+    for (const t of worldTexts) {
+      if (t.hidden) continue;
+      ctx.fillStyle = t.color;
+      ctx.font = 'bold ' + Math.floor(cell*1.2) + 'px "Courier New", monospace';
+      ctx.fillText(t.text, t.x*cell, t.y*cell);
+    }
+  }
+
+  function renderAll() {
+    paletteEl.style.display = 'none';
+    if (state === 'menu') { renderMenuCanvas(); renderMenu(); }
+    else if (state === 'editor') { syncWorldFromGame(); renderEditorCanvas(); renderEditor(); }
+    else if (state === 'spriteCreator') { renderSpriteCreatorCanvas(); renderSpriteCreator(); }
+    else if (state === 'scriptEditor') { syncWorldFromGame(); renderScriptEditorCanvas(); renderScriptEditor(); }
+    else if (state === 'musicList') { renderMenuCanvas(); renderMusicList(); }
+    else if (state === 'musicEditor') { renderMusicEditorCanvas(); renderMusicEditor(); }
+    else if (state === 'animationList') { renderMenuCanvas(); renderAnimationList(); }
+    else if (state === 'animationEditor') { renderAnimationEditorCanvas(); renderAnimationEditor(); }
+    else if (state === 'playing') { renderGame(); renderPlaying(); }
+  }
+
+  cv.addEventListener('mousedown', e => {
+    if (state === 'musicEditor' && musicGrid) {
+      const rect = cv.getBoundingClientRect(); const scale = cv.width / rect.width;
+      const mx = (e.clientX - rect.left) * scale, my = (e.clientY - rect.top) * scale;
+      const layout = musicEditorLayout();
+      const col = Math.floor((mx - layout.labelW) / layout.cell);
+      const row = Math.floor(my / layout.cell);
+      if (row >= 0 && row < MUSIC_ROWS && col >= 0 && col < MUSIC_COLS) {
+        const newVal = !musicGrid[row][col]; musicGrid[row][col] = newVal; musicDragValue = newVal; renderMusicEditorCanvas();
+      }
+      return;
+    }
+    if (state === 'spriteCreator') {
+      const rect = cv.getBoundingClientRect(); const scale = cv.width / rect.width;
+      const mx = (e.clientX - rect.left) * scale, my = (e.clientY - rect.top) * scale;
+      const n = editingSprite.pixels.length, cell = cv.width / n;
+      const gx = Math.floor(mx / cell), gy = Math.floor(my / cell);
+      if (gx < 0 || gx >= n || gy < 0 || gy >= n) return;
+      if (editingSprite.tool === 'fill') {
+        const target = editingSprite.pixels[gy][gx]; const replacement = editingSprite.color;
+        if (target === replacement) return;
+        floodFill(editingSprite.pixels, gx, gy, target, replacement);
+        renderSpriteCreatorCanvas(); return;
+      }
+      if (e.button === 2 || editingSprite.color === null) editingSprite.pixels[gy][gx] = null;
+      else editingSprite.pixels[gy][gx] = editingSprite.color;
+      renderSpriteCreatorCanvas(); return;
+    }
+    if (state === 'animationEditor' && editingAnimation) {
+      const rect = cv.getBoundingClientRect(); const scale = cv.width / rect.width;
+      const mx = (e.clientX - rect.left) * scale, my = (e.clientY - rect.top) * scale;
+      const n = editingAnimation.size, cell = cv.width / n;
+      const gx = Math.floor(mx / cell), gy = Math.floor(my / cell);
+      if (gx < 0 || gx >= n || gy < 0 || gy >= n) return;
+      const frame = editingAnimation.frames[editingAnimationFrameIndex]; if (!frame) return;
+      if (animationTool === 'fill') {
+        const target = frame.pixels[gy][gx]; const replacement = animationPaletteColor;
+        if (target === replacement) return;
+        floodFill(frame.pixels, gx, gy, target, replacement);
+        renderAnimationEditorCanvas(); return;
+      }
+      if (e.button === 2 || animationPaletteColor === null) frame.pixels[gy][gx] = null;
+      else frame.pixels[gy][gx] = animationPaletteColor;
+      renderAnimationEditorCanvas(); return;
+    }
+    if (state === 'editor' && currentGame) {
+      const p = getGridPos(e);
+      if (editorTool === 'coord') {
+        if (p.x >= 0 && p.x < WORLD && p.y >= 0 && p.y < WORLD) showToast('x = ' + p.x + ',  y = ' + p.y);
+        return;
+      }
+      for (let i = currentGame.sprites.length - 1; i >= 0; i--) {
+        const s = currentGame.sprites[i];
+        if (!s.placed || s.deleted) continue;
+        const sz = s.size || DEFAULT_SPRITE_SIZE;
+        if (p.x >= s.x && p.x < s.x + sz && p.y >= s.y && p.y < s.y + sz) {
+          dragging = s; dragOffsetX = p.x - s.x; dragOffsetY = p.y - s.y;
+          renderEditorCanvas(); return;
+        }
+      }
+      return;
+    }
+    if (state === 'scriptEditor' && currentGame) {
+      const p = getGridPos(e);
+      if (p.x >= 0 && p.x < WORLD && p.y >= 0 && p.y < WORLD) showToast('x = ' + p.x + ',  y = ' + p.y);
+      return;
+    }
+    if (state === 'playing') {
+      const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : e.button === 1 ? 'middle' : null;
+      if (btn) {
+        mouseButtons[btn] = true; pendingClicks[btn]++;
+        if (btn === 'left') {
+          mouseDown = true; updateMouseCoords(e);
+          for (let i = sprites.length - 1; i >= 0; i--) {
+            const s = sprites[i];
+            if (s.deleted) continue;
+            if (s.collision === false) continue;
+            const sz = s.size || DEFAULT_SPRITE_SIZE;
+            if (mouseX >= s.x && mouseX < s.x + sz && mouseY >= s.y && mouseY < s.y + sz) {
+              pendingPresses.add(s.name); s.pressStart = performance.now();
+              if (s.grabbable) grabState = { sprite: s, offsetX: mouseX - s.x, offsetY: mouseY - s.y, minX: s.grabbable.minX, minY: s.grabbable.minY, maxX: s.grabbable.maxX, maxY: s.grabbable.maxY };
+              break;
+            }
+          }
+        }
+      }
+      renderGame();
+    }
+  });
+
+  cv.addEventListener('mousemove', e => {
+    if (state === 'musicEditor' && musicGrid && musicDragValue !== null) {
+      const rect = cv.getBoundingClientRect(); const scale = cv.width / rect.width;
+      const mx = (e.clientX - rect.left) * scale, my = (e.clientY - rect.top) * scale;
+      const layout = musicEditorLayout();
+      const col = Math.floor((mx - layout.labelW) / layout.cell);
+      const row = Math.floor(my / layout.cell);
+      if (row >= 0 && row < MUSIC_ROWS && col >= 0 && col < MUSIC_COLS) {
+        if (musicGrid[row][col] !== musicDragValue) { musicGrid[row][col] = musicDragValue; renderMusicEditorCanvas(); }
+      }
+      return;
+    }
+    if (state === 'editor' && dragging) {
+      const p = getGridPos(e);
+      dragging.x = p.x - dragOffsetX; dragging.y = p.y - dragOffsetY;
+      clampSprite(dragging); renderEditorCanvas(); return;
+    }
+    if (state === 'playing') {
+      updateMouseCoords(e);
+      if (grabState && grabState.sprite && !grabState.sprite.deleted && mouseDown) {
+        const s = grabState.sprite; const sz = s.size || DEFAULT_SPRITE_SIZE;
+        const newX = mouseX - grabState.offsetX;
+        const newY = mouseY - grabState.offsetY;
+        s.x = Math.max(grabState.minX, Math.min(grabState.maxX - sz, newX));
+        s.y = Math.max(grabState.minY, Math.min(grabState.maxY - sz, newY));
+        renderGame();
+      }
+    }
+  });
+
+  cv.addEventListener('contextmenu', e => { if (state === 'spriteCreator' || state === 'playing' || state === 'musicEditor' || state === 'animationEditor') e.preventDefault(); });
+  function updateMouseCoords(e) { const p = getGridPos(e); mouseX = p.x; mouseY = p.y; }
+
+  window.addEventListener('mouseup', e => {
+    const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : e.button === 1 ? 'middle' : null;
+    if (btn) mouseButtons[btn] = false;
+    musicDragValue = null;
+    if (state === 'playing' && btn === 'left') {
+      for (const s of sprites) {
+        if (s.pressStart !== null && s.pressStart !== undefined) {
+          if (s.collision !== false) pendingReleased.add(s.name);
+          s.pressStart = null;
+        }
+      }
+      grabState = null;
+    }
+    if (state === 'editor' && dragging) { dragging = null; scheduleSave(); renderEditorCanvas(); return; }
+    if (mouseDown) { mouseDown = false; if (state === 'playing') renderGame(); }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (modalOverlay.classList.contains('show')) return;
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+    if (state === 'playing') {
+      const kn = normalizeKeyFromEvent(e.key);
+      if (kn) { if (!keysPressed.has(kn)) keysPending.add(kn); keysPressed.add(kn); }
+      if (e.key === 'o' || e.key === 'O' || e.key === 'щ' || e.key === 'Щ') { logWin.style.display = logWin.style.display === 'block' ? 'none' : 'block'; updateLog(); }
+      if (e.key === 'Escape') { gameRunning = false; gameGen++; logWin.style.display = 'none'; syncWorldFromGame(); state = 'editor'; renderAll(); }
+    }
+  });
+  window.addEventListener('keyup', e => { if (state === 'playing') { const kn = normalizeKeyFromEvent(e.key); if (kn) keysPressed.delete(kn); } });
+  function updateLog() { logWin.textContent = log.length ? log.join('\n') : '(пусто)'; logWin.scrollTop = logWin.scrollHeight; }
+
+  function splitArgs(s) {
+    const args = []; let depth = 0, cur = '', inStr = null;
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) { cur += c; if (c === inStr && s[i-1] !== '\\') inStr = null; continue; }
+      if (c === '"' || c === "'") { inStr = c; cur += c; continue; }
+      if (c === '(') depth++; else if (c === ')') depth--;
+      if (c === ',' && depth === 0) { args.push(cur.trim()); cur = ''; continue; }
+      cur += c;
+    }
+    if (cur.trim() || args.length > 0) args.push(cur.trim());
+    return args;
+  }
+  function matchCall(line, name) {
+    const re = new RegExp('^' + name + '\\s*\\((.*)\\)$');
+    const m = line.match(re); if (!m) return null; return splitArgs(m[1]);
+  }
+
+  let lastStop = null;
+  function parseProgram(code) {
+    code = code.replace(/\bend\s+if\s+/g, 'end\nif ');
+    code = code.replace(/\bend\s+while\s+/g, 'end\nwhile ');
+    code = code.replace(/\bend\s+function\s+/g, 'end\nfunction ');
+    code = code.replace(/\bend\s+if\s*$/gm, 'end');
+    code = code.replace(/\bend\s+while\s*$/gm, 'end');
+    code = code.replace(/\bend\s+function\s*$/gm, 'end');
+    const lines = code.split('\n').map(l => l.replace(/(^|[^:"'])\/\/.*$/, '$1').trim());
+    let idx = 0;
+    function parseBlock(isTop) {
+      lastStop = null;
+      const stmts = [];
+      while (idx < lines.length) {
+        const line = lines[idx];
+        if (!line) { idx++; continue; }
+        if (line === 'end') { idx++; lastStop = 'end'; if (isTop) continue; return stmts; }
+        if (line === 'else') { idx++; lastStop = 'else'; return stmts; }
+        if (line.startsWith('elseif ')) { lastStop = 'elseif'; return stmts; }
+        idx++;
+        if (line.startsWith('if ')) {
+          const branches = [];
+          branches.push({ cond: line.slice(3).trim(), body: parseBlock(false) });
+          while (lastStop === 'elseif') {
+            const elseifLine = lines[idx];
+            const cond = elseifLine.slice(7).trim();
+            idx++;
+            branches.push({ cond, body: parseBlock(false) });
+          }
+          let elseBody = null;
+          if (lastStop === 'else') elseBody = parseBlock(false);
+          stmts.push({ type: 'if', branches, elseBody });
+        } else if (line.startsWith('while ')) {
+          const cond = line.slice(6).trim();
+          const body = parseBlock(false);
+          stmts.push({ type: 'while', cond, body });
+        } else if (line.startsWith('function ')) {
+          const m = line.match(/^function\s+([A-Za-z_]\w*)\s*\(\s*\)\s*$/);
+          if (!m) throw new Error('Синтаксис: function name()');
+          const body = parseBlock(false);
+          stmts.push({ type: 'function', name: m[1], body });
+        } else {
+          stmts.push({ type: 'stmt', line });
+        }
+      }
+      lastStop = 'end';
+      return stmts;
+    }
+    return parseBlock(true);
+  }
+
+  const PRESSED_RE_SRC = '([A-Za-z_]\\w*)\\.pressed\\s*(?:\\(\\s*(True|False|true|false)\\s*\\))?';
+  const MOUSE_BTN_RE_SRC = 'mouse\\.(Left|Right|Middle|LeftClick|RightClick|MiddleClick)\\s*(?:\\(\\s*(True|False|true|false)\\s*\\))?';
+  const KEY_RE_SRC = 'key\\.([A-Za-z0-9_]+)\\s*(?:\\(\\s*(True|False|true|false)\\s*\\))?';
+  const TAGS_RE_SRC = 'tags\\.([A-Za-z_]\\w*)\\.pressed\\s*(?:\\(\\s*(True|False|true|false)\\s*\\))?';
+  const RESERVED_PREFIXES = ['mouse','key','mpos','Spos','TSprite','LEDame','True','False','Math','random','connected','all','sound','rotation','hold','released','tags','anim'];
+
+  function isMouseBtn(name, hold) {
+    let k = name.toLowerCase();
+    if (k === 'leftclick') k = 'left'; if (k === 'rightclick') k = 'right'; if (k === 'middleclick') k = 'middle';
+    if (hold) return !!mouseButtons[k];
+    if (pendingClicks[k] > 0) { pendingClicks[k]--; return true; }
+    return false;
+  }
+  function isSpritePressed(name, hold) {
+    const sp = sprites.find(x => x.name === name && !x.deleted);
+    if (!sp) { pendingPresses.delete(name); return false; }
+    if (sp.collision === false) { pendingPresses.delete(name); return false; }
+    const sz = sp.size || DEFAULT_SPRITE_SIZE;
+    if (hold) return mouseDown && mouseX >= sp.x && mouseX < sp.x + sz && mouseY >= sp.y && mouseY < sp.y + sz;
+    if (pendingPresses.has(name)) { pendingPresses.delete(name); return true; }
+    return false;
+  }
+  function replaceConnected(s) {
+    const re = /\bconnected\s*\(\s*(tags\.[A-Za-z_]\w*|[A-Za-z_]\w*)\s*,\s*(tags\.[A-Za-z_]\w*|[A-Za-z_]\w*)\s*\)/g;
+    return s.replace(re, (_, a, b) => isAnyConnectedExpr(a, b) ? 'true' : 'false');
+  }
+  function preprocessExpr(s) {
+    s = s.replace(/\bLEDame\.started\b/g, (performance.now() - gameStartTime < 100) ? 'true' : 'false');
+    s = s.replace(/\bmpos\.x\b/g, String(mouseX));
+    s = s.replace(/\bmpos\.y\b/g, String(mouseY));
+    s = replaceConnected(s);
+    s = s.replace(new RegExp('\\b' + TAGS_RE_SRC, 'g'), (_, tag, h) => { const hold = (h === 'True' || h === 'true'); return isAnyTagPressed(tag, hold) ? 'true' : 'false'; });
+    s = s.replace(/\btags\.([A-Za-z_]\w*)\.([xy])\b/g, (_, tag, prop) => { const group = spritesWithTag(tag); if (!group.length) return '0'; return String(prop === 'x' ? group[0].x : group[0].y); });
+    s = s.replace(/\btags\.([A-Za-z_]\w*)\.count\b/g, (_, tag) => String(spritesWithTag(tag).length));
+    s = s.replace(/\b([A-Za-z_]\w*)\.gp\.([xy])\b/g, (full, name, prop) => { if (RESERVED_PREFIXES.includes(name)) return full; const sp = sprites.find(x => x.name === name); if (!sp) return full; return String(prop === 'x' ? sp.x : sp.y); });
+    s = s.replace(/\b([A-Za-z_]\w*)\.gp\b/g, (full, name) => { if (RESERVED_PREFIXES.includes(name)) return full; const sp = sprites.find(x => x.name === name); if (!sp) return full; return JSON.stringify(sp.x + ',' + sp.y); });
+    s = s.replace(/\bhold\s*\(([^,()]+),\s*([A-Za-z_]\w*)\s*\)/g, (_, msStr, name) => { let ms = Number(String(msStr).trim()); if (!isFinite(ms)) { const vn = String(msStr).trim(); ms = vars.has(vn) ? (Number(vars.get(vn)) || 0) : 0; } return isSpriteHeld(name, ms) ? 'true' : 'false'; });
+    s = s.replace(/\breleased\s*\(\s*([A-Za-z_]\w*)\s*\)/g, (_, name) => wasSpriteReleased(name) ? 'true' : 'false');
+    s = s.replace(new RegExp('\\b' + MOUSE_BTN_RE_SRC, 'g'), (_, n, h) => { const hold = (h === 'True' || h === 'true'); return isMouseBtn(n, hold) ? 'true' : 'false'; });
+    s = s.replace(new RegExp('\\b' + KEY_RE_SRC, 'g'), (_, n, h) => { const hold = (h === 'True' || h === 'true'); return isKeyPressed(n, hold) ? 'true' : 'false'; });
+    s = s.replace(/\b([A-Za-z_]\w*)\.([xy])\b/g, (full, name, prop) => { if (RESERVED_PREFIXES.includes(name)) return full; const sp = sprites.find(x => x.name === name); if (!sp) return full; return String(prop === 'x' ? sp.x : sp.y); });
+    s = s.replace(new RegExp('\\b' + PRESSED_RE_SRC, 'g'), (_, n, h) => { const hold = (h === 'True' || h === 'true'); return isSpritePressed(n, hold) ? 'true' : 'false'; });
+    s = s.replace(/\bSpos\(\s*(\w+)\s*\)/g, (_, n) => { const sp = sprites.find(x => x.name === n); return sp ? sp.x : 0; });
+    return s;
+  }
+  function evalMathExpr(expr, ctxObj) {
+    let s = preprocessExpr(expr);
+    s = s.replace(/\b([A-Za-z_]\w*)\b/g, (m) => {
+      if (m === 'True') return 'true'; if (m === 'False') return 'false'; if (m === 'Math') return 'Math';
+      if (vars.has(m)) { const v = vars.get(m); if (typeof v === 'boolean') return v ? 'true' : 'false'; if (typeof v === 'string') return JSON.stringify(v); return String(v); }
+      return m;
+    });
+    try {
+      const fn = new Function('random', '"use strict";return (' + s + ')');
+      return fn((a, b) => { a = Number(a) || 0; b = Number(b) || 0; if (a > b) { const t = a; a = b; b = t; } return Math.floor(Math.random() * (b - a + 1)) + a; });
+    } catch (e) { throw new Error('math: ' + e.message); }
+  }
+  function substituteVarsForStr(expr) {
+    let out = ''; let i = 0; const n = expr.length;
+    while (i < n) {
+      const c = expr[i];
+      if (c === '"' || c === "'") {
+        const q = c; out += c; i++;
+        while (i < n && expr[i] !== q) {
+          if (expr[i] === '\\' && i + 1 < n) { out += expr[i] + expr[i+1]; i += 2; }
+          else { out += expr[i]; i++; }
+        }
+        if (i < n) { out += expr[i]; i++; }
+        continue;
+      }
+      if (/[A-Za-z_]/.test(c)) {
+        let j = i;
+        while (j < n && /[A-Za-z0-9_]/.test(expr[j])) j++;
+        const word = expr.slice(i, j);
+        if (word === 'True') out += '"true"';
+        else if (word === 'False') out += '"false"';
+        else if (word === 'Math' || word === 'random' || word === 'undefined' || word === 'null') out += word;
+        else if (vars.has(word)) {
+          const v = vars.get(word);
+          out += JSON.stringify(v === undefined || v === null ? '' : String(v));
+        } else out += word;
+        i = j; continue;
+      }
+      if (c >= '0' && c <= '9') {
+        let j = i;
+        while (j < n && ((expr[j] >= '0' && expr[j] <= '9') || expr[j] === '.')) j++;
+        out += expr.slice(i, j); i = j; continue;
+      }
+      out += c; i++;
+    }
+    return out;
+  }
+  function evalStrExpr(expr, ctxObj) {
+    let s = preprocessExpr(expr);
+    s = substituteVarsForStr(s);
+    try {
+      const fn = new Function('random', '"use strict";return (' + s + ');');
+      const r = fn((a, b) => { a = Number(a) || 0; b = Number(b) || 0; if (a > b) { const t = a; a = b; b = t; } return Math.floor(Math.random() * (b - a + 1)) + a; });
+      return r === undefined || r === null ? '' : String(r);
+    } catch (e) { throw new Error('str: ' + e.message); }
+  }
+  function evalExprInner(expr, ctxObj) {
+    expr = expr.trim(); if (!expr) return '';
+    let m = expr.match(/^math\s*\((.*)\)$/) || expr.match(/^math\s+(.+)$/); if (m) return evalMathExpr(m[1], ctxObj);
+    if (expr === 'True') return true; if (expr === 'False') return false;
+    if (expr === 'LEDame.started') return (performance.now() - gameStartTime) < 100;
+    if (/^-?\d+(\.\d+)?$/.test(expr)) return parseFloat(expr);
+    if ((expr[0] === '"' && expr.slice(-1) === '"') || (expr[0] === "'" && expr.slice(-1) === "'")) return expr.slice(1, -1);
+    if (expr === 'mpos.x') return mouseX; if (expr === 'mpos.y') return mouseY;
+    m = expr.match(/^connected\s*\(\s*(tags\.[A-Za-z_]\w*|[A-Za-z_]\w*)\s*,\s*(tags\.[A-Za-z_]\w*|[A-Za-z_]\w*)\s*\)$/); if (m) return isAnyConnectedExpr(m[1], m[2]);
+    m = expr.match(new RegExp('^' + TAGS_RE_SRC + '$')); if (m) { const hold = (m[2] === 'True' || m[2] === 'true'); return isAnyTagPressed(m[1], hold); }
+    m = expr.match(/^tags\.([A-Za-z_]\w*)\.([xy])$/); if (m) { const group = spritesWithTag(m[1]); return group.length ? (m[2] === 'x' ? group[0].x : group[0].y) : 0; }
+    m = expr.match(/^tags\.([A-Za-z_]\w*)\.count$/); if (m) return spritesWithTag(m[1]).length;
+    m = expr.match(/^([A-Za-z_]\w*)\.gp\.([xy])$/); if (m && !RESERVED_PREFIXES.includes(m[1])) { const sp = sprites.find(x => x.name === m[1]); if (sp) return m[2] === 'x' ? sp.x : sp.y; }
+    m = expr.match(/^([A-Za-z_]\w*)\.gp$/); if (m && !RESERVED_PREFIXES.includes(m[1])) { const sp = sprites.find(x => x.name === m[1]); if (sp) return sp.x + ',' + sp.y; }
+    m = expr.match(/^hold\s*\(([^,]+),\s*([A-Za-z_]\w*)\s*\)$/); if (m) { let ms = Number(m[1].trim()); if (!isFinite(ms)) { const vn = m[1].trim(); ms = vars.has(vn) ? (Number(vars.get(vn)) || 0) : 0; } return isSpriteHeld(m[2], ms); }
+    m = expr.match(/^released\s*\(\s*([A-Za-z_]\w*)\s*\)$/); if (m) return wasSpriteReleased(m[1]);
+    m = expr.match(new RegExp('^' + MOUSE_BTN_RE_SRC + '$')); if (m) { const hold = (m[2] === 'True' || m[2] === 'true'); return isMouseBtn(m[1], hold); }
+    m = expr.match(new RegExp('^' + KEY_RE_SRC + '$')); if (m) { const hold = (m[2] === 'True' || m[2] === 'true'); return isKeyPressed(m[1], hold); }
+    m = expr.match(new RegExp('^' + PRESSED_RE_SRC + '$')); if (m) { const hold = (m[2] === 'True' || m[2] === 'true'); return isSpritePressed(m[1], hold); }
+    m = expr.match(/^([A-Za-z_]\w*)\.([xy])$/); if (m && !RESERVED_PREFIXES.includes(m[1])) { const sp = sprites.find(x => x.name === m[1]); if (sp) return m[2] === 'x' ? sp.x : sp.y; }
+    const scanArgs = matchCall(expr, 'Scan');
+    if (scanArgs) { const x = evalExpr(scanArgs[0], ctxObj), y = evalExpr(scanArgs[1], ctxObj); if (y < 0 || y >= WORLD || x < 0 || x >= WORLD) return false; return world[y][x] !== null && !worldPixHidden[y][x]; }
+    m = expr.match(/^Spos\(\s*(\w+)\s*\)$/); if (m) { const sp = sprites.find(x => x.name === m[1]); return sp ? sp.x : 0; }
+    if (vars.has(expr)) return vars.get(expr);
+    if (/[+\-*/%<>=!()]/.test(expr) || /\.pressed|mpos\.|mouse\.|key\.|\.gp|tags\.|connected/.test(expr)) { try { return evalMathExpr(expr, ctxObj); } catch (e) {} }
+    return expr;
+  }
+  function evalExpr(expr, ctxObj) {
+    let v = evalExprInner(expr, ctxObj);
+    if (typeof v === 'string' && v.includes('{')) v = v.replace(/\{(\w+)\}/g, (_, n) => vars.has(n) ? String(vars.get(n)) : '');
+    return v;
+  }
+
+  async function waitUnpaused(gen) { while (paused) { if (gen !== gameGen) return; await new Promise(r => setTimeout(r, 50)); } }
+  async function execute(stmts, ctxObj) {
+    const gen = gameGen;
+    for (const s of stmts) {
+      if (gen !== gameGen || !gameRunning) return;
+      await waitUnpaused(gen);
+      if (gen !== gameGen || !gameRunning) return;
+      if (s.type === 'if') {
+        let handled = false;
+        for (const b of s.branches) {
+          if (evalExpr(b.cond, ctxObj)) { await execute(b.body, ctxObj); handled = true; break; }
+        }
+        if (!handled && s.elseBody) await execute(s.elseBody, ctxObj);
+      } else if (s.type === 'while') {
+        let iter = 0;
+        while (evalExpr(s.cond, ctxObj)) {
+          if (gen !== gameGen || !gameRunning) return;
+          iter++; if (iter > 100000) throw new Error('While: превышен лимит итераций');
+          await waitUnpaused(gen);
+          if (gen !== gameGen || !gameRunning) return;
+          try { await execute(s.body, ctxObj); }
+          catch (e) { if (e instanceof BreakSignal) break; if (e instanceof ContinueSignal) continue; throw e; }
+        }
+      } else if (s.type === 'function') { funcs.set(s.name, s.body); }
+      else await execStmt(s.line, ctxObj);
+    }
+  }
+
+  function parseGrabArgs(argStrs, ctxObj) {
+    const nums = argStrs.map(a => Number(evalExpr(a, ctxObj)));
+    for (const n of nums) if (!isFinite(n)) throw new Error('grab: все аргументы должны быть числами');
+    if (nums.length === 0 || (nums.length === 1 && nums[0] === '')) return null;
+    if (nums.length === 2) {
+      let maxX = nums[0], maxY = nums[1];
+      if (maxX < 0) maxX = 0; if (maxY < 0) maxY = 0;
+      return { minX: 0, minY: 0, maxX, maxY };
+    }
+    if (nums.length === 4) {
+      let [x1, y1, x2, y2] = nums;
+      const minX = Math.min(x1, x2); const maxX = Math.max(x1, x2);
+      const minY = Math.min(y1, y2); const maxY = Math.max(y1, y2);
+      return { minX, minY, maxX, maxY };
+    }
+    throw new Error('grab() / grab(x, y) / grab(x1, y1, x2, y2)');
+  }
+
+  async function execStmt(line, ctxObj) {
+    line = line.trim(); if (!line) return;
+    if (line === 'break') throw new BreakSignal();
+    if (line === 'continue') throw new ContinueSignal();
+    if (line === 'LEDame.pause') { paused = true; return; }
+    if (line === 'LEDame.update') { paused = false; renderGame(); return; }
+    if (line === 'LEDame.exit') { gameRunning = false; gameGen++; logWin.style.display='none'; syncWorldFromGame(); state='editor'; renderAll(); return; }
+    if (line === 'LEDame.restart') { gameGen++; await new Promise(r => setTimeout(r, 20)); startGame(); return; }
+    if (line === 'TSprite.delete') { if (ctxObj.sprite) { ctxObj.sprite.deleted = true; pendingPresses.delete(ctxObj.sprite.name); if (grabState && grabState.sprite === ctxObj.sprite) grabState = null; } renderGame(); return; }
+    if (line === 'TSprite.now') { if (ctxObj.sprite) ctxObj.sprite.deleted = false; renderGame(); return; }
+    if (line === 'TSprite.hide') { if (ctxObj.sprite) { ctxObj.sprite.deleted = true; pendingPresses.delete(ctxObj.sprite.name); if (grabState && grabState.sprite === ctxObj.sprite) grabState = null; } renderGame(); return; }
+    if (line === 'TSprite.show') { if (ctxObj.sprite) ctxObj.sprite.deleted = false; renderGame(); return; }
+
+    let args = matchCall(line, 'TSprite\\.move');
+    if (args) {
+      if (args.length !== 2) throw new Error('TSprite.move(x/y, число)');
+      const axis = args[0], val = evalExpr(args[1], ctxObj);
+      if (axis !== 'x' && axis !== 'y') throw new Error('TSprite.move: первым аргументом x или y');
+      if (ctxObj.sprite) { ctxObj.sprite[axis] += Number(val) || 0; clampSprite(ctxObj.sprite); }
+      renderGame(); return;
+    }
+    args = matchCall(line, 'TSprite\\.pos');
+    if (args) {
+      if (args.length !== 2) throw new Error('TSprite.pos(x, y)');
+      const x = Number(evalExpr(args[0], ctxObj)), y = Number(evalExpr(args[1], ctxObj));
+      if (ctxObj.sprite) { ctxObj.sprite.x = x; ctxObj.sprite.y = y; clampSprite(ctxObj.sprite); }
+      renderGame(); return;
+    }
+    args = matchCall(line, 'TSprite\\.grab');
+    if (args) {
+      if (!ctxObj.sprite) throw new Error('TSprite.grab: используется вне скрипта спрайта');
+      const box = parseGrabArgs(args, ctxObj);
+      ctxObj.sprite.grabbable = box;
+      renderGame(); return;
+    }
+    args = matchCall(line, 'TSprite\\.collision');
+    if (args) {
+      if (!ctxObj.sprite) throw new Error('TSprite.collision: используется вне скрипта спрайта');
+      if (args.length !== 1) throw new Error('TSprite.collision(True/False)');
+      const raw = evalExpr(args[0], ctxObj);
+      const enabled = (raw === true || String(raw).toLowerCase() === 'true');
+      ctxObj.sprite.collision = enabled;
+      if (!enabled) {
+        pendingPresses.delete(ctxObj.sprite.name);
+        pendingReleased.delete(ctxObj.sprite.name);
+        ctxObj.sprite.pressStart = null;
+        if (grabState && grabState.sprite === ctxObj.sprite) grabState = null;
+      }
+      renderGame(); return;
+    }
+    args = matchCall(line, 'rotation');
+    if (args) {
+      if (args.length !== 1) throw new Error('rotation(сторона/угол)');
+      const raw = evalExpr(args[0], ctxObj); let deg = Number(raw);
+      if (!isFinite(deg)) { const k = String(raw).toLowerCase(); if (k === 'left') deg = -90; else if (k === 'right') deg = 90; else if (k === 'up') deg = 0; else if (k === 'down') deg = 180; else deg = 0; }
+      deg = Math.round(deg / 90) * 90; deg = ((deg % 360) + 360) % 360;
+      if (ctxObj.sprite) for (let i = 0; i < deg / 90; i++) rotateSprite90cw(ctxObj.sprite);
+      renderGame(); return;
+    }
+
+    let m = line.match(/^anim\.([A-Za-z_]\w*)\.(play|stop)\s*\(\s*\)$/);
+    if (m) {
+      if (!ctxObj.sprite) throw new Error('anim можно использовать только в скрипте спрайта');
+      if (m[2] === 'play') {
+        const anim = (currentGame.animations || []).find(a => a.name === m[1]);
+        if (!anim) throw new Error('Анимация "' + m[1] + '" не найдена');
+        ctxObj.sprite._anim = { animation: anim, startTime: performance.now() };
+      } else ctxObj.sprite._anim = null;
+      renderGame(); return;
+    }
+
+    m = line.match(/^([A-Za-z_]\w*)\.grab\s*\((.*)\)$/);
+    if (m && !RESERVED_PREFIXES.includes(m[1])) {
+      const sp = sprites.find(x => x.name === m[1]);
+      if (sp) {
+        const a = splitArgs(m[2]);
+        const box = parseGrabArgs(a, ctxObj);
+        sp.grabbable = box;
+        renderGame(); return;
+      }
+    }
+
+    m = line.match(/^([A-Za-z_]\w*)\.collision\s*\((.*)\)$/);
+    if (m && !RESERVED_PREFIXES.includes(m[1])) {
+      const sp = sprites.find(x => x.name === m[1]);
+      if (sp) {
+        const a = splitArgs(m[2]);
+        if (a.length !== 1) throw new Error(m[1] + '.collision(True/False)');
+        const raw = evalExpr(a[0], ctxObj);
+        const enabled = (raw === true || String(raw).toLowerCase() === 'true');
+        sp.collision = enabled;
+        if (!enabled) {
+          pendingPresses.delete(sp.name);
+          pendingReleased.delete(sp.name);
+          sp.pressStart = null;
+          if (grabState && grabState.sprite === sp) grabState = null;
+        }
+        renderGame(); return;
+      }
+    }
+
+    m = line.match(/^tags\.([A-Za-z_]\w*)\.(delete|hide|now|show)$/);
+    if (m) { const hide = (m[2] === 'delete' || m[2] === 'hide'); for (const s of spritesWithTag(m[1])) { s.deleted = hide; if (hide) pendingPresses.delete(s.name); if (hide && grabState && grabState.sprite === s) grabState = null; } renderGame(); return; }
+    m = line.match(/^tags\.([A-Za-z_]\w*)\.move\s*\((.*)\)$/);
+    if (m) {
+      const a = splitArgs(m[2]); if (a.length !== 2) throw new Error('tags.X.move(x/y, число)');
+      if (a[0] !== 'x' && a[0] !== 'y') throw new Error('tags.X.move: первым аргументом x или y');
+      const axis = a[0], val = Number(evalExpr(a[1], ctxObj)) || 0;
+      for (const s of spritesWithTag(m[1])) { s[axis] += val; clampSprite(s); }
+      renderGame(); return;
+    }
+    m = line.match(/^tags\.([A-Za-z_]\w*)\.pos\s*\((.*)\)$/);
+    if (m) {
+      const a = splitArgs(m[2]); if (a.length !== 2) throw new Error('tags.X.pos(x, y)');
+      const tx = Number(evalExpr(a[0], ctxObj)), ty = Number(evalExpr(a[1], ctxObj));
+      for (const s of spritesWithTag(m[1])) { s.x = tx; s.y = ty; clampSprite(s); }
+      renderGame(); return;
+    }
+
+    let allCall = parseAllArgs(line, 'hide') || parseAllArgs(line, 'delete');
+    if (allCall) {
+      const exSet = evalAllExceptions(allCall.args, ctxObj);
+      for (const s of sprites) { if (!exSet.has(s.name)) { s.deleted = true; if (grabState && grabState.sprite === s) grabState = null; } }
+      for (const t of worldTexts) { if (t.id && exSet.has(t.id)) continue; t.hidden = true; }
+      for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++) { const pid = worldPixId[y][x]; if (pid === null) continue; if (!exSet.has(pid)) worldPixHidden[y][x] = true; }
+      for (const name of Array.from(pendingPresses)) if (!exSet.has(name)) pendingPresses.delete(name);
+      renderGame(); return;
+    }
+    allCall = parseAllArgs(line, 'show') || parseAllArgs(line, 'now');
+    if (allCall) {
+      const exSet = evalAllExceptions(allCall.args, ctxObj);
+      for (const s of sprites) { if (!exSet.has(s.name)) s.deleted = false; }
+      for (const t of worldTexts) { if (exSet.size === 0) t.hidden = false; else if (t.id && !exSet.has(t.id)) t.hidden = false; else if (!t.id) t.hidden = false; }
+      for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++) { const pid = worldPixId[y][x]; if (pid === null) continue; if (!exSet.has(pid)) worldPixHidden[y][x] = false; }
+      renderGame(); return;
+    }
+    let allMoveCall = parseAllCallArgs(line, 'move');
+    if (allMoveCall) {
+      const a = allMoveCall.args; if (a.length < 2) throw new Error('all.move(x/y, число, [исключения...])');
+      if (a[0] !== 'x' && a[0] !== 'y') throw new Error('all.move: первым аргументом x или y');
+      const axis = a[0], val = Number(evalExpr(a[1], ctxObj)) || 0;
+      const exSet = evalAllExceptions(a.slice(2), ctxObj);
+      for (const s of sprites) { if (!exSet.has(s.name)) { s[axis] += val; clampSprite(s); } }
+      for (const t of worldTexts) { if (!(t.id && exSet.has(t.id))) t[axis] += val; }
+      const allPixIds = new Set();
+      for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++) if (worldPixId[y][x] !== null) allPixIds.add(worldPixId[y][x]);
+      for (const pid of allPixIds) { if (exSet.has(pid)) continue; const pixs = collectPixelsById(pid); clearPixels(pixs); for (const p of pixs) { if (axis === 'x') p.x += val; else p.y += val; } placePixels(pixs); }
+      renderGame(); return;
+    }
+    let allPosCall = parseAllCallArgs(line, 'pos');
+    if (allPosCall) {
+      const a = allPosCall.args; if (a.length < 2) throw new Error('all.pos(x, y, [исключения...])');
+      const tx = Number(evalExpr(a[0], ctxObj)), ty = Number(evalExpr(a[1], ctxObj));
+      const exSet = evalAllExceptions(a.slice(2), ctxObj);
+      for (const s of sprites) { if (!exSet.has(s.name)) { s.x = tx; s.y = ty; clampSprite(s); } }
+      for (const t of worldTexts) { if (!(t.id && exSet.has(t.id))) { t.x = tx; t.y = ty; } }
+      renderGame(); return;
+    }
+    m = line.match(/^([A-Za-z_]\w*)\.(delete|hide|now|show)$/);
+    if (m && !RESERVED_PREFIXES.includes(m[1])) {
+      const hide = (m[2] === 'delete' || m[2] === 'hide');
+      const sp = sprites.find(x => x.name === m[1]);
+      if (sp) { sp.deleted = hide; if (hide) pendingPresses.delete(sp.name); if (hide && grabState && grabState.sprite === sp) grabState = null; renderGame(); return; }
+      let found = false;
+      for (const t of worldTexts) if (t.id === m[1]) { t.hidden = hide; found = true; }
+      for (let y = 0; y < WORLD; y++) for (let x = 0; x < WORLD; x++) if (worldPixId[y][x] === m[1]) { worldPixHidden[y][x] = hide; found = true; }
+      if (found) { renderGame(); return; }
+    }
+    m = line.match(/^([A-Za-z_]\w*)\.move\s*\((.*)\)$/);
+    if (m && !RESERVED_PREFIXES.includes(m[1])) {
+      const a = splitArgs(m[2]); if (a.length !== 2) throw new Error(m[1] + '.move(x/y, число)');
+      if (a[0] !== 'x' && a[0] !== 'y') throw new Error(m[1] + '.move: первым аргументом x или y');
+      const axis = a[0], val = Number(evalExpr(a[1], ctxObj)) || 0;
+      const sp = sprites.find(x => x.name === m[1]);
+      if (sp) { sp[axis] += val; clampSprite(sp); renderGame(); return; }
+      let found = false;
+      for (const t of worldTexts) if (t.id === m[1]) { t[axis] += val; found = true; }
+      const pixs = collectPixelsById(m[1]);
+      if (pixs.length) { clearPixels(pixs); for (const p of pixs) { if (axis === 'x') p.x += val; else p.y += val; } placePixels(pixs); found = true; }
+      if (found) { renderGame(); return; }
+    }
+    m = line.match(/^([A-Za-z_]\w*)\.pos\s*\((.*)\)$/);
+    if (m && !RESERVED_PREFIXES.includes(m[1])) {
+      const a = splitArgs(m[2]); if (a.length !== 2) throw new Error(m[1] + '.pos(x, y)');
+      const tx = Number(evalExpr(a[0], ctxObj)), ty = Number(evalExpr(a[1], ctxObj));
+      const sp = sprites.find(x => x.name === m[1]);
+      if (sp) { sp.x = tx; sp.y = ty; clampSprite(sp); renderGame(); return; }
+      const texts = worldTexts.filter(t => t.id === m[1]); const pixs = collectPixelsById(m[1]);
+      if (texts.length || pixs.length) {
+        let minX = Infinity, minY = Infinity;
+        for (const t of texts) { if (t.x < minX) minX = t.x; if (t.y < minY) minY = t.y; }
+        for (const p of pixs) { if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; }
+        if (!isFinite(minX)) { minX = 0; minY = 0; }
+        const dx = tx - minX, dy = ty - minY;
+        for (const t of texts) { t.x += dx; t.y += dy; }
+        if (pixs.length) { clearPixels(pixs); for (const p of pixs) { p.x += dx; p.y += dy; } placePixels(pixs); }
+        renderGame(); return;
+      }
+    }
+    args = matchCall(line, 'Spawn');
+    if (args) {
+      if (args.length !== 3) throw new Error('Spawn(имя, x, y)');
+      let nm = String(evalExpr(args[0], ctxObj)).replace(/^"|"$/g, '');
+      const x = Number(evalExpr(args[1], ctxObj)), y = Number(evalExpr(args[2], ctxObj));
+      const proto = sprites.find(s => s.name === nm && !s._copy) || sprites.find(s => s.name === nm);
+      if (!proto) throw new Error('Spawn: спрайт "' + nm + '" не найден');
+      sprites.push({ name: nm, pixels: proto.pixels.map(r => r.slice()), size: proto.size || DEFAULT_SPRITE_SIZE, x, y, deleted: false, script: proto.script, _copy: true, pressStart: null, tags: (proto.tags || []).slice(), grabbable: null, collision: true });
+      renderGame(); return;
+    }
+    args = matchCall(line, 'Kill');
+    if (args) {
+      let nm = String(evalExpr(args[0], ctxObj)).replace(/^"|"$/g, '');
+      sprites = sprites.filter(s => s.name !== nm);
+      pendingPresses.delete(nm); pendingReleased.delete(nm);
+      if (grabState && grabState.sprite && grabState.sprite.name === nm) grabState = null;
+      renderGame(); return;
+    }
+    args = matchCall(line, 'Wait');
+    if (args) { const v = Number(evalExpr(args[0], ctxObj)) || 0; await new Promise(r => setTimeout(r, Math.min(v, 60000))); return; }
+    args = matchCall(line, 'sound');
+    if (args) {
+      if (args.length < 1 || args.length > 3) throw new Error('sound(имя, [громкость 0-1], [скорость])');
+      const nm = String(evalExpr(args[0], ctxObj)).replace(/^"|"$/g, '');
+      const vol = args.length >= 2 ? evalExpr(args[1], ctxObj) : undefined;
+      const sp = args.length >= 3 ? evalExpr(args[2], ctxObj) : undefined;
+      const track = music.find(t => t.name === nm);
+      if (track) playMusicTrack(track, vol, sp);
+      return;
+    }
+    m = line.match(/^math\s*\((.*)\)\s*=:=\s*([A-Za-z_]\w*)$/) || line.match(/^math\s+(.+?)\s*=:=\s*([A-Za-z_]\w*)$/);
+    if (m) { vars.set(m[2], evalMathExpr(m[1], ctxObj)); return; }
+    m = line.match(/^math\s*\((.*)\)$/) || line.match(/^math\s+(.+)$/);
+    if (m) { log.push(String(evalMathExpr(m[1], ctxObj))); updateLog(); return; }
+    m = line.match(/^str\s*\((.*)\)\s*=:=\s*([A-Za-z_]\w*)$/) || line.match(/^str\s+(.+?)\s*=:=\s*([A-Za-z_]\w*)$/);
+    if (m) { vars.set(m[2], evalStrExpr(m[1], ctxObj)); return; }
+    m = line.match(/^str\s*\((.*)\)$/) || line.match(/^str\s+(.+)$/);
+    if (m) { log.push(String(evalStrExpr(m[1], ctxObj))); updateLog(); return; }
+    args = matchCall(line, 'createP');
+    if (args) {
+      if (args.length !== 3 && args.length !== 4) throw new Error('createP(x, y, цвет, [id])');
+      const x = Number(evalExpr(args[0], ctxObj)), y = Number(evalExpr(args[1], ctxObj));
+      const c = resolveColor(evalExpr(args[2], ctxObj));
+      const id = args.length === 4 ? String(evalExpr(args[3], ctxObj)) : null;
+      if (y >= 0 && y < WORLD && x >= 0 && x < WORLD) {
+        const wasHidden = (worldPixId[y][x] === id) ? worldPixHidden[y][x] : false;
+        world[y][x] = c; worldPixId[y][x] = id; worldPixHidden[y][x] = wasHidden;
+      }
+      renderGame(); return;
+    }
+    args = matchCall(line, 'DelP');
+    if (args) {
+      if (args.length !== 2) throw new Error('DelP(x, y)');
+      const x = Number(evalExpr(args[0], ctxObj)), y = Number(evalExpr(args[1], ctxObj));
+      if (y >= 0 && y < WORLD && x >= 0 && x < WORLD) { world[y][x] = null; worldPixId[y][x] = null; worldPixHidden[y][x] = false; }
+      renderGame(); return;
+    }
+    args = matchCall(line, 'createT');
+    if (args) {
+      if (args.length !== 4 && args.length !== 5) throw new Error('createT(текст, цвет, x, y, [id])');
+      const t = evalExpr(args[0], ctxObj);
+      const c = resolveColor(evalExpr(args[1], ctxObj));
+      const x = Number(evalExpr(args[2], ctxObj)), y = Number(evalExpr(args[3], ctxObj));
+      const id = args.length === 5 ? String(evalExpr(args[4], ctxObj)) : null;
+      const existing = worldTexts.find(o => o.x === x && o.y === y && o.id === id);
+      const wasHidden = existing ? existing.hidden : false;
+      worldTexts = worldTexts.filter(o => !(o.x === x && o.y === y && o.id === id));
+      worldTexts.push({ text: String(t), color: c, x, y, hidden: wasHidden, id });
+      renderGame(); return;
+    }
+    args = matchCall(line, 'print');
+    if (args) { log.push(args.map(a => String(evalExpr(a, ctxObj))).join(' ')); updateLog(); return; }
+    m = line.match(/^var\s+([A-Za-z_]\w*)\s*=\s*(.+)$/);
+    if (m) { if (!vars.has(m[1])) vars.set(m[1], evalExpr(m[2], ctxObj)); return; }
+    m = line.match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
+    if (m && !line.includes('=:=')) { vars.set(m[1], evalExpr(m[2], ctxObj)); return; }
+    m = line.match(/^([A-Za-z_]\w*)\s*\(\s*\)$/);
+    if (m && funcs.has(m[1])) { await execute(funcs.get(m[1]), ctxObj); return; }
+    throw new Error('неизвестная команда: ' + line);
+  }
+
+  async function startGame() {
+    if (!currentGame) return;
+    gameGen++;
+    WORLD = Math.max(MIN_WORLD, Math.min(MAX_WORLD, currentGame.worldSize || DEFAULT_WORLD));
+    world = Array.from({length: WORLD}, () => Array(WORLD).fill(null));
+    worldPixId = Array.from({length: WORLD}, () => Array(WORLD).fill(null));
+    worldPixHidden = Array.from({length: WORLD}, () => Array(WORLD).fill(false));
+    worldTexts = [];
+    vars = new Map(); funcs = new Map();
+    paused = false; log = [];
+    gameStartTime = performance.now(); grabState = null;
+    logWin.style.display = 'none'; updateLog();
+    mouseX = -1; mouseY = -1; mouseDown = false;
+    mouseButtons = { left: false, right: false, middle: false };
+    pendingClicks = { left: 0, right: 0, middle: 0 };
+    pendingPresses = new Set(); pendingReleased = new Set();
+    keysPressed = new Set(); keysPending = new Set();
+
+    sprites = currentGame.sprites
+      .filter(s => s.placed)
+      .map(s => ({ name: s.name, pixels: s.pixels, size: s.size || DEFAULT_SPRITE_SIZE, x: s.x, y: s.y, deleted: false, script: s.script, pressStart: null, tags: (s.tags || []).slice(), grabbable: null, collision: true }));
+
+    const preScripts = [currentGame.globalScript, ...sprites.map(s => s.script)];
+    for (const code of preScripts) {
+      if (!code || !code.trim()) continue;
+      for (const rawLine of code.split('\n')) {
+        const l = rawLine.replace(/(^|[^:"'])\/\/.*$/, '$1').trim();
+        const m = l.match(/^var\s+([A-Za-z_]\w*)\s*=\s*(.+)$/);
+        if (m && !vars.has(m[1])) { try { vars.set(m[1], evalExpr(m[2], { vars, sprite: null })); } catch (e) {} }
+      }
+    }
+
+    state = 'playing'; gameRunning = true; renderAll();
+    if (currentGame.globalScript.trim()) runScript(currentGame.globalScript, { vars, sprite: null });
+    for (const s of sprites) { if (s.script && s.script.trim()) runScript(s.script, { vars, sprite: s }); }
+  }
+
+  async function runScript(code, ctxObj) {
+    const gen = gameGen;
+    let ast; try { ast = parseProgram(code); } catch (e) { showError(e); return; }
+    while (gameRunning && gen === gameGen) {
+      try { await execute(ast, ctxObj); }
+      catch (e) { if (e instanceof BreakSignal || e instanceof ContinueSignal) {} else { showError(e); return; } }
+      if (gen !== gameGen || !gameRunning) return;
+      await new Promise(r => setTimeout(r, 16));
+    }
+  }
+  function showError(e) {
+    const box = el('div', 'error-box');
+    box.textContent = 'код не правильно компилирован: ' + (e && e.message ? e.message : String(e));
+    right.appendChild(box);
+    setTimeout(() => { if (box.parentNode) box.remove(); }, 12000);
+  }
+
+  window.addEventListener('resize', () => {
+    if (state === 'playing') renderGame();
+    else if (state === 'spriteCreator') renderSpriteCreatorCanvas();
+    else if (state === 'animationEditor') renderAnimationEditorCanvas();
+    else if (state === 'scriptEditor') renderScriptEditorCanvas();
+    else if (state === 'editor') renderEditorCanvas();
+    else if (state === 'musicEditor') renderMusicEditorCanvas();
+    else renderMenuCanvas();
+  });
+
+  document.addEventListener('mousedown', () => { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{}); }, true);
+
+  loadSyntaxColors();
+  try {
+    const toRem = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('ledame_snd_') || k === 'ledame_games_v1' || k === 'ledame_games_v2')) toRem.push(k);
+    }
+    for (const k of toRem) localStorage.removeItem(k);
+  } catch (e) {}
+  games = loadSavedGames();
+  music = loadSavedMusic();
+  renderAll();
+})();
+</script>
+</body>
+</html>
